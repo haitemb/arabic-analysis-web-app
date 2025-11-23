@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { Lock, CheckCircle, GraduationCap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Alert } from '../components/ui/alert';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { supabase } from '../services/supabaseClient';
 
 export default function ResetPasswordPage() {
@@ -67,46 +71,46 @@ export default function ResetPasswordPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-        <div className="w-full max-w-md text-center space-y-6">
-          <div className="flex justify-center">
-            <div className="bg-gradient-to-br from-emerald-600 to-blue-600 p-4 rounded-2xl animate-slide-down">
-              <CheckCircle className="size-12 text-white" />
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-0">
+          <CardHeader className="space-y-3 text-center">
+            <div className="flex justify-center mb-2">
+              <div className="bg-gradient-to-br from-emerald-600 to-blue-600 p-4 rounded-2xl">
+                <CheckCircle className="size-12 text-white" />
+              </div>
             </div>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              تم التحديث بنجاح
-            </h2>
-            <p className="text-gray-600">
+            <CardTitle className="text-blue-900">تم التحديث بنجاح</CardTitle>
+            <CardDescription>
               تم تغيير كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول بكلمتك الجديدة.
-            </p>
-          </div>
-          <Link
-            to="/login"
-            className="inline-block w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600 text-white font-medium py-3 rounded-lg transition-all duration-300 hover:shadow-lg"
-          >
-            العودة إلى تسجيل الدخول
-          </Link>
-        </div>
+            </CardDescription>
+          </CardHeader>
+
+          <CardFooter>
+            <Link to="/login" className="w-full">
+              <Button className="w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600">
+                العودة إلى تسجيل الدخول
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-3">
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-xl border-0">
+        <CardHeader className="space-y-3 text-center">
           <div className="flex justify-center mb-2">
             <div className="bg-gradient-to-br from-blue-600 to-emerald-500 p-3 rounded-2xl">
               <GraduationCap className="size-8 text-white" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">منصة جودة التعليم AI</h1>
-          <p className="text-gray-600">إعادة تعيين كلمة المرور</p>
-        </div>
+          <CardTitle className="text-blue-900">منصة جودة التعليم AI</CardTitle>
+          <CardDescription>إعادة تعيين كلمة المرور</CardDescription>
+        </CardHeader>
 
-        <div className="bg-white rounded-lg shadow-lg p-8 space-y-5">
+        <CardContent className="space-y-4">
           {alert && (
             <Alert
               type={alert.type}
@@ -116,58 +120,53 @@ export default function ResetPasswordPage() {
           )}
 
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              كلمة المرور الجديدة
-            </label>
+            <Label htmlFor="password">كلمة المرور الجديدة</Label>
             <div className="relative">
               <Lock className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-              <input
+              <Input
                 id="password"
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300"
+                className="pr-10"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-700"
-            >
-              تأكيد كلمة المرور
-            </label>
+            <Label htmlFor="confirmPassword">تأكيد كلمة المرور</Label>
             <div className="relative">
               <Lock className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-              <input
+              <Input
                 id="confirmPassword"
                 type="password"
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300"
+                className="pr-10"
               />
             </div>
           </div>
+        </CardContent>
 
-          <button
+        <CardFooter className="flex flex-col space-y-4">
+          <Button
             onClick={handleReset}
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600 text-white font-medium py-2 rounded-lg transition-all duration-300 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600 disabled:opacity-50"
           >
             {isLoading ? 'جاري التحديث...' : 'تأكيد'}
-          </button>
-        </div>
+          </Button>
 
-        <p className="text-center text-sm text-gray-600">
-          هل تتذكر كلمة المرور؟{' '}
-          <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
-            تسجيل الدخول
-          </Link>
-        </p>
-      </div>
+          <div className="text-center text-sm text-gray-600">
+            هل تتذكر كلمة المرور؟{' '}
+            <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+              تسجيل الدخول
+            </Link>
+          </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
