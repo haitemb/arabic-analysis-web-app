@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { LoginScreen } from './components/LoginScreen';
 import { Dashboard } from './components/Dashboard';
@@ -9,6 +9,7 @@ import { HistoryPage } from './components/HistoryPage';
 import { TestExtractor } from './components/test';
 import { Toaster } from './components/ui/sonner';
 import ResetPasswordPage from "./components/reset-password.tsx";
+import { supabase } from './services/supabaseClient';
 export interface AnalysisData {
   documentName: string;
   executiveSummary?: string;
@@ -57,8 +58,8 @@ export interface AnalysisData {
 // Auth Context
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: () => void;
   logout: () => void;
+  user: any | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,23 +74,58 @@ export const useAuth = () => {
 
 // Auth Provider
 function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('isAuthenticated') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<any | null>(null);
 
-  const login = () => {
-    localStorage.setItem('isAuthenticated', 'true');
-    setIsAuthenticated(true);
-  };
+  useEffect(() => {
+    let mounted = true;
 
-  const logout = () => {
-    localStorage.removeItem('isAuthenticated');
-    sessionStorage.removeItem('currentAnalysis');
-    setIsAuthenticated(false);
+    // initialize session
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setIsAuthenticated(!!data.session);
+        setUser(data.session?.user ?? null);
+      } catch (e) {
+        console.error('Failed to get supabase session', e);
+      }
+    })();
+
+    const res = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+      setUser(session?.user ?? null);
+      if (!session) {
+        // clear stored analysis when user signs out
+        sessionStorage.removeItem('currentAnalysis');
+      }
+    });
+
+    return () => {
+      mounted = false;
+      // res.data.subscription exists in the v2 callback result
+      try {
+        res.data.subscription.unsubscribe();
+      } catch (e) {
+        // ignore
+      }
+    };
+  }, []);
+
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Sign out error', e);
+    } finally {
+      sessionStorage.removeItem('currentAnalysis');
+      setIsAuthenticated(false);
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, logout, user }}>
       {children}
     </AuthContext.Provider>
   );
@@ -120,12 +156,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 // Login Page Component
 function LoginPage() {
-  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogin = () => {
-    login();
     const from = (location.state as any)?.from?.pathname || '/dashboard';
     navigate(from, { replace: true });
   };

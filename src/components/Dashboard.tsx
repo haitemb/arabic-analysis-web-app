@@ -5,9 +5,11 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Upload, FileText, GraduationCap, Clock, CheckCircle2 } from 'lucide-react';
 import { Header } from './Header';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../App';
 import { Alert } from './ui/alert';
+import { supabase } from '../services/supabaseClient';
+import { useEffect } from 'react';
 
 interface DashboardProps {}
 
@@ -19,37 +21,121 @@ interface RecentAnalysis {
   score: number;
 }
 
-const mockRecentAnalyses: RecentAnalysis[] = [
-  {
-    id: '1',
-    documentName: 'مقدمة_في_الجبر.pdf',
-    date: '2025-11-14',
-    educationLevel: 'ثانوي',
-    score: 85,
-  },
-  {
-    id: '2',
-    documentName: 'الأحياء_الخلايا.docx',
-    date: '2025-11-13',
-    educationLevel: 'متوسط',
-    score: 78,
-  },
-  {
-    id: '3',
-    documentName: 'القراءة_والفهم.pdf',
-    date: '2025-11-12',
-    educationLevel: 'ابتدائي',
-    score: 92,
-  },
-];
-
 export function Dashboard(_: DashboardProps) {
+  const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([]);
+  const [loadingAnalyses, setLoadingAnalyses] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const analysisIdFromQuery = searchParams.get('analysis');
+
+  useEffect(() => {
+    const fetchAnalyses = async () => {
+      setLoadingAnalyses(true);
+
+      if (!user) {
+        setRecentAnalyses([]);
+        setLoadingAnalyses(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('analyses')
+        .select(`
+          id,
+          filename,
+          education_level,
+          overall_score,
+          created_at
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error fetching analyses:', error);
+      }
+
+      const mapped =
+        data?.map((a: any) => ({
+          id: a.id,
+          documentName: a.filename,
+          date: new Date(a.created_at).toLocaleDateString('ar-DZ'),
+          educationLevel: a.education_level,
+          score: a.overall_score,
+        })) ?? [];
+
+      setRecentAnalyses(mapped);
+      setLoadingAnalyses(false);
+    };
+
+    fetchAnalyses();
+  }, [user]);
+
+  useEffect(() => {
+    const loadAnalysisFromSupabase = async (id: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('analyses')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (error) {
+          console.error('Error loading analysis:', error);
+          return;
+        }
+
+        if (!data) return;
+
+        const mapped: RecentAnalysis = {
+          id: data.id,
+          documentName: data.filename ?? data.document_name ?? 'مستند',
+          date: new Date(data.created_at).toLocaleDateString('ar-DZ'),
+          educationLevel: data.education_level,
+          score: data.overall_score ?? 0,
+        };
+
+        // also build full analysisData used by AnalysisResults/DetailedReport
+        const analysisData = {
+          documentName: data.filename ?? data.document_name ?? 'مستند',
+          executiveSummary: data.executive_summary ?? data.executiveSummary ?? null,
+          educationLevel: data.education_level,
+          overallScore: data.overall_score ?? 0,
+          uploadDate: data.created_at ?? new Date().toISOString(),
+          linguisticAnalysis: data.linguistic_analysis ?? null,
+          semanticAnalysis: data.semantic_analysis ?? null,
+          bloomsTaxonomy: data.blooms_taxonomy ?? null,
+          contentOrganization: data.content_organization ?? null,
+          strengths: data.strengths ?? null,
+          weaknesses: data.weaknesses ?? null,
+          recommendations: data.recommendations ?? null,
+          keyFindings: data.key_findings ?? data.keyFindings ?? null,
+        };
+
+        // prepend to recent analyses list
+        setRecentAnalyses(prev => [mapped, ...prev.filter(a => a.id !== mapped.id)].slice(0, 10));
+
+        // save to sessionStorage and navigate to the Analysis Results page so existing components render it
+        try {
+          sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisData));
+          navigate('/analysis', { state: { analysisData } });
+        } catch (e) {
+          console.error('Error navigating to analysis page:', e);
+        }
+      } catch (err) {
+        console.error('Error loading analysis:', err);
+      }
+    };
+
+    if (analysisIdFromQuery) {
+      loadAnalysisFromSupabase(analysisIdFromQuery);
+    }
+  }, [analysisIdFromQuery]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -85,40 +171,76 @@ export function Dashboard(_: DashboardProps) {
   const handleAnalyze = async () => {
     if (selectedLevel && uploadedFile) {
       setIsAnalyzing(true);
+
       try {
-        // Move analysis start logic here (extract text, call Gemini, persist and navigate)
-        try {
-          const { extractTextFromFile } = await import('../services/textExtractor');
-          const extractedText = await extractTextFromFile(uploadedFile);
-          const { analyzeWithGemini } = await import('../services/geminiApi');
-          const geminiResult = await analyzeWithGemini(extractedText, selectedLevel);
+        const { extractTextFromFile } = await import('../services/textExtractor');
+        const { analyzeWithGemini } = await import('../services/geminiApi');
 
-          const analysisData = {
-            documentName: uploadedFile.name,
-            executiveSummary: geminiResult.executiveSummary,
-            educationLevel: selectedLevel,
-            overallScore: geminiResult.overallScore,
-            uploadDate: new Date().toISOString(),
-            linguisticAnalysis: geminiResult.linguisticAnalysis,
-            semanticAnalysis: geminiResult.semanticAnalysis,
-            bloomsTaxonomy: geminiResult.bloomsTaxonomy,
-            contentOrganization: geminiResult.contentOrganization,
-            strengths: geminiResult.strengths,
-            weaknesses: geminiResult.weaknesses,
-            recommendations: geminiResult.recommendations,
-            keyFindings: geminiResult.keyFindings,
-          };
+        const extractedText = await extractTextFromFile(uploadedFile);
+        const geminiResult = await analyzeWithGemini(extractedText, selectedLevel);
 
-          sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisData));
-          navigate('/analysis', { state: { analysisData } });
-        } catch (error) {
-          console.error('Analysis error:', error);
-          alert(`خطأ في التحليل: ${error instanceof Error ? error.message : 'حدث خطأ غير معروف'}`);
-        }
+        const analysisData = {
+          documentName: uploadedFile.name,
+          executiveSummary: geminiResult.executiveSummary,
+          educationLevel: selectedLevel,
+          overallScore: geminiResult.overallScore,
+          uploadDate: new Date().toISOString(),
+          linguisticAnalysis: geminiResult.linguisticAnalysis,
+          semanticAnalysis: geminiResult.semanticAnalysis,
+          bloomsTaxonomy: geminiResult.bloomsTaxonomy,
+          contentOrganization: geminiResult.contentOrganization,
+          strengths: geminiResult.strengths,
+          weaknesses: geminiResult.weaknesses,
+          recommendations: geminiResult.recommendations,
+          keyFindings: geminiResult.keyFindings,
+        };
+
+        // === SAVE TO SUPABASE ===
+const { data: inserted, error } = await supabase
+  .from('analyses')
+  .insert({
+    user_id: user?.id,
+    filename: uploadedFile.name,
+    education_level: selectedLevel,
+    overall_score: geminiResult.overallScore,
+    executive_summary: analysisData.executiveSummary,
+    linguistic_analysis: analysisData.linguisticAnalysis,
+    semantic_analysis: analysisData.semanticAnalysis,
+    blooms_taxonomy: analysisData.bloomsTaxonomy,
+    content_organization: analysisData.contentOrganization,
+    strengths: analysisData.strengths,
+    weaknesses: analysisData.weaknesses,
+    recommendations: analysisData.recommendations,
+    key_findings: analysisData.keyFindings,
+  })
+  .select()
+  .single();
+
+if (error) {
+  console.error('Error saving analysis:', error);
+} else if (inserted) {
+  // prepend to recent analyses
+  const mapped: RecentAnalysis = {
+    id: inserted.id,
+    documentName: inserted.filename ?? analysisData.documentName,
+    date: new Date(inserted.created_at ?? analysisData.uploadDate).toLocaleDateString('ar-DZ'),
+    educationLevel: inserted.education_level ?? analysisData.educationLevel,
+    score: inserted.overall_score ?? analysisData.overallScore,
+  };
+
+  setRecentAnalyses((prev) => [mapped, ...prev].slice(0, 10));
+}
+
+
+        // Save to session + navigate
+        sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisData));
+        navigate('/analysis', { state: { analysisData } });
       } catch (error) {
         console.error('Analysis failed:', error);
-        setIsAnalyzing(false);
+        alert('حدث خطأ أثناء التحليل');
       }
+
+      setIsAnalyzing(false);
     }
   };
 
@@ -254,31 +376,39 @@ export function Dashboard(_: DashboardProps) {
           
           <CardContent>
             <div className="space-y-3">
-              {mockRecentAnalyses.map((analysis) => (
-                <div
-                  key={analysis.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="bg-white p-2 rounded">
-                      <FileText className="size-5 text-blue-600" />
-                    </div>
-                    
-                    <div className="flex-1">
-                      <p className="text-gray-900">{analysis.documentName}</p>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                        <span>{analysis.date}</span>
-                        <span>•</span>
-                        <span>{analysis.educationLevel}</span>
+              {loadingAnalyses ? (
+                <p className="text-center text-gray-500 py-4">جاري التحميل...</p>
+              ) : recentAnalyses.length === 0 ? (
+                <p className="text-center text-gray-500 py-4">لا توجد تحليلات حتى الآن</p>
+              ) : (
+                recentAnalyses.map((analysis: RecentAnalysis) => {
+                  return (
+                    <div
+                      key={analysis.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="bg-white p-2 rounded">
+                          <FileText className="size-5 text-blue-600" />
+                        </div>
+
+                        <div className="flex-1">
+                          <p className="text-gray-900">{analysis.documentName}</p>
+                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                            <span>{analysis.date}</span>
+                            <span>•</span>
+                            <span>{analysis.educationLevel}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={`px-3 py-1 rounded-full ${getScoreColor(analysis.score)}`}>
+                        <span>{analysis.score}/100</span>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className={`px-3 py-1 rounded-full ${getScoreColor(analysis.score)}`}>
-                    <span>{analysis.score}/100</span>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
           </CardContent>
         </Card>

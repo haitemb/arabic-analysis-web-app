@@ -16,18 +16,7 @@ export function DetailedReport({ analysisData }: DetailedReportProps) {
   const handleDownloadPDF = () => {
     alert('سيتم تنزيل ملف PDF هنا');
   };
-
-  // Debugging: log the entire analysisData and specifically the executiveSummary
-  useEffect(() => {
-    console.groupCollapsed('DetailedReport debug');
-    console.log('analysisData (DetailedReport):', analysisData);
-    console.log('analysisData.executiveSummary:', analysisData?.executiveSummary);
-    if (!analysisData?.executiveSummary) {
-      console.warn('DetailedReport: executiveSummary is missing or empty');
-    }
-    console.groupEnd();
-  }, [analysisData]);
-
+ 
   const strengths = analysisData.strengths;
   const weaknesses = analysisData.weaknesses;
   const recommendations = analysisData.recommendations;
@@ -100,11 +89,7 @@ export function DetailedReport({ analysisData }: DetailedReportProps) {
               {analysisData.executiveSummary }
             </p>
 
-            {/* Quick debug panel visible in UI to help debugging when console isn't available */}
-            <div className="mt-3 p-3 bg-gray-50 border rounded text-sm text-gray-700">
-              <strong className="block mb-1">Debug: executiveSummary (preview)</strong>
-              <pre className="whitespace-pre-wrap max-h-40 overflow-auto">{String(analysisData.executiveSummary ?? '<<undefined>>')}</pre>
-            </div>
+  
           </CardContent>
         </Card>
 

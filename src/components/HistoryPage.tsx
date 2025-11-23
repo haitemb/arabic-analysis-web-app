@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Header } from './Header';
 import { FileText, Search, Filter, Calendar, TrendingUp, Download, Eye, Trash2, Star } from 'lucide-react';
 import { AlgerianPattern } from './AlgerianPattern';
+import { supabase } from '../services/supabaseClient';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 
@@ -21,74 +23,16 @@ interface Analysis {
   favorite: boolean;
 }
 
-const mockAnalyses: Analysis[] = [
-  {
-    id: '1',
-    documentName: 'مقدمة_في_الجبر_المتقدم.pdf',
-    date: '2025-11-14',
-    educationLevel: 'ثانوي',
-    score: 92,
-    status: 'مكتمل',
-    category: 'رياضيات',
-    favorite: true,
-  },
-  {
-    id: '2',
-    documentName: 'الأحياء_الخلايا_والأنسجة.docx',
-    date: '2025-11-13',
-    educationLevel: 'متوسط',
-    score: 78,
-    status: 'مكتمل',
-    category: 'علوم',
-    favorite: false,
-  },
-  {
-    id: '3',
-    documentName: 'القراءة_والفهم_المستوى_الأول.pdf',
-    date: '2025-11-12',
-    educationLevel: 'ابتدائي',
-    score: 88,
-    status: 'مكتمل',
-    category: 'لغة عربية',
-    favorite: true,
-  },
-  {
-    id: '4',
-    documentName: 'تاريخ_الجزائر_المعاصر.pdf',
-    date: '2025-11-10',
-    educationLevel: 'ثانوي',
-    score: 85,
-    status: 'مكتمل',
-    category: 'تاريخ',
-    favorite: false,
-  },
-  {
-    id: '5',
-    documentName: 'الفيزياء_الكهرباء_والمغناطيسية.docx',
-    date: '2025-11-08',
-    educationLevel: 'ثانوي',
-    score: 81,
-    status: 'مكتمل',
-    category: 'علوم',
-    favorite: false,
-  },
-  {
-    id: '6',
-    documentName: 'الجغرافيا_موارد_الجزائر.pdf',
-    date: '2025-11-05',
-    educationLevel: 'متوسط',
-    score: 76,
-    status: 'مكتمل',
-    category: 'جغرافيا',
-    favorite: false,
-  },
-];
+// analyses will be loaded from Supabase for the logged-in user
 
 export function HistoryPage(_: HistoryPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('الكل');
   const [filterCategory, setFilterCategory] = useState('الكل');
-  const [analyses, setAnalyses] = useState(mockAnalyses);
+  const [sortOption, setSortOption] = useState('newest');
+  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
@@ -96,10 +40,99 @@ export function HistoryPage(_: HistoryPageProps) {
     return 'text-red-600 bg-red-50 border-red-200';
   };
 
-  const toggleFavorite = (id: string) => {
-    setAnalyses(analyses.map(a => 
-      a.id === id ? { ...a, favorite: !a.favorite } : a
-    ));
+  useEffect(() => {
+    const fetchAnalyses = async () => {
+      try {
+        setLoading(true);
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          console.error('Error getting user:', userError);
+          setLoading(false);
+          return;
+        }
+
+        const user = userData?.user;
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('analyses')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        const mapped: Analysis[] = (data || []).map((a: any) => ({
+          id: a.id,
+          documentName: a.filename || a.document_name || a.documentName || 'مستند',
+          date: a.created_at || a.date || new Date().toISOString(),
+          educationLevel: a.education_level || a.educationLevel || 'غير محدد',
+          score: Number(a.overall_score ?? a.overallScore ?? 0),
+          status: a.status || 'مكتمل',
+          category: a.category || a.subject || 'عام',
+          favorite: Boolean(a.is_favorite || a.favorite || false),
+        }));
+
+        setAnalyses(mapped);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching analyses:', err);
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyses();
+  }, []);
+
+  const toggleFavorite = async (id: string) => {
+    // optimistic update
+    const prev = analyses;
+    const idx = analyses.findIndex(a => a.id === id);
+    if (idx === -1) return;
+    const current = analyses[idx].favorite;
+    const updated = analyses.map(a => (a.id === id ? { ...a, favorite: !current } : a));
+    setAnalyses(updated);
+
+    try {
+      const { error } = await supabase
+        .from('analyses')
+        .update({ is_favorite: !current })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating favorite:', error);
+        setAnalyses(prev); // revert
+      }
+    } catch (err) {
+      console.error('Error updating favorite:', err);
+      setAnalyses(prev); // revert
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('هل تريد حذف هذا التحليل نهائيًا؟')) return;
+
+    try {
+      const { error } = await supabase
+        .from('analyses')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting analysis:', error);
+        return;
+      }
+
+      // remove from UI
+      setAnalyses(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error('Error deleting analysis:', err);
+    }
   };
 
   const filteredAnalyses = analyses.filter(analysis => {
@@ -110,10 +143,26 @@ export function HistoryPage(_: HistoryPageProps) {
     return matchesSearch && matchesLevel && matchesCategory;
   });
 
+  // apply sorting to the filtered list
+  const sortedAnalyses = [...filteredAnalyses].sort((a, b) => {
+    switch (sortOption) {
+      case 'oldest':
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      case 'newest':
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      case 'highest':
+        return b.score - a.score;
+      case 'lowest':
+        return a.score - b.score;
+      default:
+        return 0;
+    }
+  });
+
   const stats = {
     total: analyses.length,
     thisMonth: analyses.filter(a => new Date(a.date).getMonth() === new Date().getMonth()).length,
-    avgScore: Math.round(analyses.reduce((sum, a) => sum + a.score, 0) / analyses.length),
+    avgScore: analyses.length ? Math.round(analyses.reduce((sum, a) => sum + a.score, 0) / analyses.length) : 0,
     favorites: analyses.filter(a => a.favorite).length,
   };
 
@@ -217,17 +266,15 @@ export function HistoryPage(_: HistoryPageProps) {
                 </SelectContent>
               </Select>
               
-              <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <Select value={sortOption} onValueChange={setSortOption}>
                 <SelectTrigger className="border-emerald-300">
-                  <SelectValue placeholder="المادة" />
+                  <SelectValue placeholder="ترتيب" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="الكل">جميع المواد</SelectItem>
-                  <SelectItem value="رياضيات">رياضيات</SelectItem>
-                  <SelectItem value="علوم">علوم</SelectItem>
-                  <SelectItem value="لغة عربية">لغة عربية</SelectItem>
-                  <SelectItem value="تاريخ">تاريخ</SelectItem>
-                  <SelectItem value="جغرافيا">جغرافيا</SelectItem>
+                  <SelectItem value="oldest">الأقدم → الأحدث</SelectItem>
+                  <SelectItem value="newest">الأحدث → الأقدم</SelectItem>
+                  <SelectItem value="highest">أعلى درجة</SelectItem>
+                  <SelectItem value="lowest">أقل درجة</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -242,7 +289,7 @@ export function HistoryPage(_: HistoryPageProps) {
               <div>
                 <CardTitle className="text-blue-900">التحليلات</CardTitle>
                 <CardDescription>
-                  عرض {filteredAnalyses.length} من {analyses.length} تحليل
+                  عرض {sortedAnalyses.length} من {analyses.length} تحليل
                 </CardDescription>
               </div>
             </div>
@@ -250,7 +297,7 @@ export function HistoryPage(_: HistoryPageProps) {
           
           <CardContent>
             <div className="space-y-3">
-              {filteredAnalyses.map((analysis) => (
+              {sortedAnalyses.map((analysis) => (
                 <div
                   key={analysis.id}
                   className="flex items-center justify-between p-4 bg-gradient-to-l from-gray-50 to-white rounded-lg border-2 border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all"
@@ -270,7 +317,7 @@ export function HistoryPage(_: HistoryPageProps) {
                       <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                         <span className="flex items-center gap-1">
                           <Calendar className="size-3" />
-                          {new Date(analysis.date).toLocaleDateString('ar-SA')}
+                          {new Date(analysis.date).toLocaleDateString('en-GB')}
                         </span>
                         <Badge variant="outline" className="border-emerald-300 text-emerald-700">
                           {analysis.educationLevel}
@@ -296,13 +343,13 @@ export function HistoryPage(_: HistoryPageProps) {
                       >
                         <Star className={`size-4 ${analysis.favorite ? 'fill-amber-500 text-amber-500' : 'text-gray-400'}`} />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-blue-50">
+                      <Button variant="ghost" size="sm" className="hover:bg-blue-50" onClick={() => navigate(`/dashboard?analysis=${analysis.id}`)}>
                         <Eye className="size-4 text-blue-600" />
                       </Button>
                       <Button variant="ghost" size="sm" className="hover:bg-emerald-50">
                         <Download className="size-4 text-emerald-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-red-50">
+                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => handleDelete(analysis.id)}>
                         <Trash2 className="size-4 text-red-600" />
                       </Button>
                     </div>
