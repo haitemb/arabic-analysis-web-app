@@ -181,7 +181,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             </div>
 
             {isSignUp && (
-              <div className="space-y-2">
+              <div className="space-y-2 mb-4 sm:mb-6">
                 <Label htmlFor="confirmPassword">تأكيد كلمة المرور</Label>
                 <div className="relative">
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />

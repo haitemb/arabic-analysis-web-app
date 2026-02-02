@@ -210,9 +210,22 @@ export async function analyzeWithGemini(
     console.log('🎯 Extracted JSON string:', jsonText);
     console.log('📏 Extracted JSON length:', jsonText.length);
 
-    // Parse whatever JSON we get
+    // Parse whatever JSON we get, using a safe parser that sanitizes lone backslashes
     console.log('\n🔄 Attempting to parse JSON...');
-    const parsed = JSON.parse(jsonText);
+
+    function safeParseJSON(text: string) {
+      try {
+        // Replace single backslashes not followed by a quote or another backslash
+        const sanitized = text.replace(/\\([^"\\])/g, "\\\\$1");
+        return JSON.parse(sanitized);
+      } catch (err) {
+        console.error('JSON parse error:', err);
+        console.log('Problematic text snippet:', text.slice(2600, 2700));
+        throw err;
+      }
+    }
+
+    const parsed = safeParseJSON(jsonText);
     console.log('✅ Successfully parsed JSON response!');
     console.log('🔍 Parsed object keys:', Object.keys(parsed));
     

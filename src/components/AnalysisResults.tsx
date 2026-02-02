@@ -168,16 +168,18 @@ export function AnalysisResults({ analysisData }: AnalysisResultsProps) {
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-gray-700">
-                  {analysisData.keyFindings.linguistic.map((finding, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      {index % 2 === 0 ? (
-                        <CheckCircle className="size-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      ) : (
-                        <AlertCircle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                      )}
-                      <span>{finding}</span>
-                    </li>
-                  ))}
+                  {analysisData.keyFindings.linguistic
+                    .filter((f: string) => !!f && f.toString().trim() !== '')
+                    .map((finding, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        {index % 2 === 0 ? (
+                          <CheckCircle className="size-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <AlertCircle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        )}
+                        <span>{finding}</span>
+                      </li>
+                    ))}
                 </ul>
               </CardContent>
             </Card>
@@ -231,16 +233,18 @@ export function AnalysisResults({ analysisData }: AnalysisResultsProps) {
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-gray-700">
-                  {analysisData.keyFindings.semantic.map((finding, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      {index % 2 === 0 ? (
-                        <CheckCircle className="size-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      ) : (
-                        <AlertCircle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                      )}
-                      <span>{finding}</span>
-                    </li>
-                  ))}
+                  {analysisData.keyFindings.semantic
+                    .filter((f: string) => !!f && f.toString().trim() !== '')
+                    .map((finding, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        {index % 2 === 0 ? (
+                          <CheckCircle className="size-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <AlertCircle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        )}
+                        <span>{finding}</span>
+                      </li>
+                    ))}
                 </ul>
               </CardContent>
             </Card>
@@ -303,18 +307,20 @@ export function AnalysisResults({ analysisData }: AnalysisResultsProps) {
                   النتائج الرئيسية
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0">
                 <ul className="space-y-2 text-gray-700">
-                  {analysisData.keyFindings.pedagogical.map((finding, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      {index % 2 === 0 ? (
-                        <CheckCircle className="size-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      ) : (
-                        <AlertCircle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                      )}
-                      <span>{finding}</span>
-                    </li>
-                  ))}
+                  {analysisData.keyFindings.pedagogical
+                    .filter((f: string) => !!f && f.toString().trim() !== '')
+                    .map((finding, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        {index % 2 === 0 ? (
+                          <CheckCircle className="size-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <AlertCircle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        )}
+                        <span>{finding}</span>
+                      </li>
+                    ))}
                 </ul>
               </CardContent>
             </Card>

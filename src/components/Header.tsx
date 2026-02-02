@@ -114,15 +114,15 @@ useEffect(() => {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="text-right">حسابي</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => handleNavigate('/profile')} className="cursor-pointer">
+                <DropdownMenuItem onClick={() => handleNavigate('/profile')} className="cursor-pointer">
                   <User className="size-4 ml-2" />
                   الملف الشخصي
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleNavigate('/history')} className="cursor-pointer md:hidden">
+                <DropdownMenuItem onClick={() => handleNavigate('/history')} className="cursor-pointer md:hidden">
                   <History className="size-4 ml-2" />
                   السجل
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleNavigate('/dashboard')} className="cursor-pointer md:hidden">
+                <DropdownMenuItem onClick={() => handleNavigate('/dashboard')} className="cursor-pointer md:hidden">
                   <Home className="size-4 ml-2" />
                   الرئيسية
                 </DropdownMenuItem>

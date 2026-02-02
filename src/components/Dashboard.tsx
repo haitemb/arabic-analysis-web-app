@@ -153,11 +153,15 @@ export function Dashboard(_: DashboardProps) {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
-      if (file.type === 'application/pdf' || 
-          file.type === 'application/msword' || 
-          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        setUploadedFile(file);
-      }
+        // accept PDFs, Word docs and any image types
+        if (
+          file.type === 'application/pdf' ||
+          file.type === 'application/msword' ||
+          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          file.type.startsWith('image/')
+        ) {
+          setUploadedFile(file);
+        }
     }
   };
 
@@ -303,7 +307,7 @@ if (error) {
               >
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf,.doc,.docx,image/*"
                   onChange={handleFileChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
@@ -330,7 +334,7 @@ if (error) {
                           اسحب وأفلت المستند هنا أو <span className="text-blue-600">تصفح</span>
                         </p>
                         <p className="text-sm text-gray-500 mt-1">
-                          يدعم: PDF، DOC، DOCX • الحد الأقصى للملف: 10 ميجابايت
+                          يدعم: PDF، DOC، DOCX، الصور (PNG، JPG، GIF) • الحد الأقصى للملف: 10 ميجابايت
                         </p>
                       </div>
                     </>
