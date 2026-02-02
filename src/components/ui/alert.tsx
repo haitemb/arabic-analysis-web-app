@@ -57,9 +57,7 @@ export function Alert({ type, message, onClose, autoClose = 5000 }: AlertProps) 
 
   return (
     <div
-      className={`${style.container} rounded-lg p-4 flex items-start gap-3 ${
-        isClosing ? 'animate-slide-up' : 'animate-slide-down'
-      } shadow-sm border-l-4 ${
+      className={`${style.container} rounded-lg p-4 flex items-start gap-3 shadow-md border-l-4 ${
         type === 'error'
           ? 'border-l-red-600'
           : type === 'success'
@@ -67,16 +65,25 @@ export function Alert({ type, message, onClose, autoClose = 5000 }: AlertProps) 
             : type === 'warning'
               ? 'border-l-amber-600'
               : 'border-l-blue-600'
+      } transition-all duration-300 ease-out ${
+        isClosing
+          ? 'opacity-0 translate-y-2 pointer-events-none'
+          : 'opacity-100 translate-y-0 animate-in'
       }`}
+      style={{
+        animation: !isClosing ? 'slideInDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+      }}
       role="alert"
     >
       <IconComponent
-        className={`${style.icon} size-5 flex-shrink-0 mt-0.5 ${!isClosing ? 'animate-pulse-icon' : ''}`}
+        className={`${style.icon} size-5 flex-shrink-0 mt-0.5 transition-all duration-300 ${
+          !isClosing ? 'animate-bounce-subtle' : ''
+        }`}
       />
       <p className={`${style.text} text-sm font-medium flex-1`}>{message}</p>
       <button
         onClick={handleClose}
-        className={`${style.icon} hover:opacity-70 flex-shrink-0 transition-opacity`}
+        className={`${style.icon} hover:opacity-70 flex-shrink-0 transition-all duration-200 hover:scale-110`}
       >
         <X className="size-4" />
       </button>
