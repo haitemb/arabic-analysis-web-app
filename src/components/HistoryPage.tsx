@@ -9,6 +9,17 @@ import { AlgerianPattern } from './AlgerianPattern';
 import { supabase } from '../services/supabaseClient';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import { showError, showSuccess } from '../utils/toast';
 
 interface HistoryPageProps {}
 
@@ -32,6 +43,7 @@ export function HistoryPage(_: HistoryPageProps) {
   const [sortOption, setSortOption] = useState('newest');
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const getScoreColor = (score: number) => {
@@ -114,8 +126,10 @@ export function HistoryPage(_: HistoryPageProps) {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('هل تريد حذف هذا التحليل نهائيًا؟')) return;
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    const id = deleteId;
+    setDeleteId(null);
 
     try {
       const { error } = await supabase
@@ -125,13 +139,16 @@ export function HistoryPage(_: HistoryPageProps) {
 
       if (error) {
         console.error('Error deleting analysis:', error);
+        showError('تعذر حذف التحليل');
         return;
       }
 
       // remove from UI
       setAnalyses(prev => prev.filter(a => a.id !== id));
+      showSuccess('تم حذف التحليل نهائياً');
     } catch (err) {
       console.error('Error deleting analysis:', err);
+      showError('حدث خطأ أثناء الحذف');
     }
   };
 
@@ -349,7 +366,7 @@ export function HistoryPage(_: HistoryPageProps) {
                       <Button variant="ghost" size="sm" className="hover:bg-emerald-50">
                         <Download className="size-4 text-emerald-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => handleDelete(analysis.id)}>
+                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => setDeleteId(analysis.id)}>
                         <Trash2 className="size-4 text-red-600" />
                       </Button>
                     </div>
@@ -359,6 +376,23 @@ export function HistoryPage(_: HistoryPageProps) {
             </div>
           </CardContent>
         </Card>
+
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent className="rtl:text-right" dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-right">تأكيد الحذف</AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                هل أنت متأكد من أنك تريد حذف هذا التحليل نهائياً؟ لا يمكن التراجع عن هذا الإجراء.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex gap-2 sm:justify-start">
+              <AlertDialogCancel onClick={() => setDeleteId(null)}>إلغاء</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-white">
+                حذف
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

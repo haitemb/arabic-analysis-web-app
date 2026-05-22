@@ -70,11 +70,11 @@ useEffect(() => {
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-2 rounded-xl shadow-lg">
-              <GraduationCap className="size-6 text-white" />
+            <div className="relative p-0.5 rounded-xl bg-white/50 shadow-sm border border-gray-100">
+              <img src="/logo.jpg" alt="Logo" className="h-10 w-auto object-contain rounded-lg" />
             </div>
             <div>
-              <h1 className="text-blue-900">منصة جودة التعليم AI</h1>
+              <h1 className="text-blue-900 font-bold text-xl">مؤشر الجودة</h1>
               <p className="text-sm text-gray-600">تحليل جودة المحتوى التعليمي</p>
             </div>
           </div>

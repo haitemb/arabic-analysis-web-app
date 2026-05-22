@@ -108,14 +108,19 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-xl border-0">
-        <CardHeader className="space-y-3 text-center">
-          <div className="flex justify-center mb-2">
-            <div className="bg-gradient-to-br from-blue-600 to-emerald-500 p-3 rounded-2xl">
-              <GraduationCap className="size-8 text-white" />
+        <CardHeader className="space-y-2 text-center">
+          <div className="flex justify-center mb-1">
+            <div className="relative" style={{ width: '80px', height: '80px' }}>
+              <img 
+                src="/logo.jpg" 
+                alt="Logo" 
+                className="w-full h-full rounded-full object-cover shadow-md border-4 border-white ring-1 ring-gray-100" 
+              />
+              <div className="absolute inset-0 rounded-full ring-1 ring-inset ring-black/10"></div>
             </div>
           </div>
-          <CardTitle className="text-blue-900">منصة جودة التعليم AI</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-blue-900 text-2xl font-bold">مؤشر الجودة</CardTitle>
+          <CardDescription className="text-sm">
             {isSignUp ? 'إنشاء حساب جديد' : 'تسجيل الدخول إلى حسابك'}
           </CardDescription>
         </CardHeader>

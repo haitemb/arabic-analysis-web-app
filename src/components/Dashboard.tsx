@@ -3,13 +3,14 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Upload, FileText, GraduationCap, Clock, CheckCircle2 } from 'lucide-react';
+import { Upload, FileText, GraduationCap, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Header } from './Header';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../App';
 import { Alert } from './ui/alert';
 import { supabase } from '../services/supabaseClient';
 import { useEffect } from 'react';
+import { showError } from '../utils/toast';
 
 interface DashboardProps {}
 
@@ -28,6 +29,7 @@ export function Dashboard(_: DashboardProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [limitReached, setLimitReached] = useState(false);
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -153,6 +155,10 @@ export function Dashboard(_: DashboardProps) {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        showError('حجم الملف يتجاوز 5 ميجابايت.');
+        return;
+      }
         // accept PDFs, Word docs and any image types
         if (
           file.type === 'application/pdf' ||
@@ -168,15 +174,41 @@ export function Dashboard(_: DashboardProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setUploadedFile(files[0]);
+      const file = files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        showError('حجم الملف يتجاوز 5 ميجابايت.');
+        return;
+      }
+      setUploadedFile(file);
     }
   };
 
   const handleAnalyze = async () => {
+    if (isAnalyzing) return;
     if (selectedLevel && uploadedFile) {
       setIsAnalyzing(true);
+      setLimitReached(false);
 
       try {
+        // 1. CHECK USAGE BEFORE ANALYSIS
+        if (user?.id) {
+           const today = new Date();
+           today.setHours(0,0,0,0);
+           const { count, error: countError } = await supabase
+             .from('analyses')
+             .select('*', { count: 'exact', head: true })
+             .eq('user_id', user.id)
+             .gte('created_at', today.toISOString());
+             
+           if (countError) console.error("Error checking usage:", countError);
+
+           if (count !== null && count >= 3) {
+               setLimitReached(true);
+               setIsAnalyzing(false);
+               return;
+           }
+        }
+
         const { extractTextFromFile } = await import('../services/textExtractor');
         const { analyzeWithGemini } = await import('../services/geminiApi');
 
@@ -223,6 +255,11 @@ const { data: inserted, error } = await supabase
 if (error) {
   console.error('Error saving analysis:', error);
 } else if (inserted) {
+  // 4. INCREMENT USAGE ON SUCCESS
+  if (user?.id) {
+     await supabase.rpc('check_and_increment_usage', { uid: user.id });
+  }
+
   // prepend to recent analyses
   const mapped: RecentAnalysis = {
     id: inserted.id,
@@ -241,7 +278,7 @@ if (error) {
         navigate('/analysis', { state: { analysisData } });
       } catch (error) {
         console.error('Analysis failed:', error);
-        alert('حدث خطأ أثناء التحليل');
+        showError('حدث خطأ أثناء التحليل');
       }
 
       setIsAnalyzing(false);
@@ -255,6 +292,37 @@ if (error) {
     if (score >= 70) return 'text-amber-600 bg-amber-50';
     return 'text-red-600 bg-red-50';
   };
+
+  if (limitReached) {
+    return (
+      <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 50%, #fef3c7 100%)' }}>
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 py-8 flex items-center justify-center">
+          <Card className="w-full max-w-2xl border-2 border-red-200 shadow-2xl p-8 text-center bg-white rounded-2xl mt-12">
+            <div className="flex justify-center mb-6">
+              <div className="bg-red-50 p-6 rounded-full border border-red-100">
+                <AlertTriangle className="size-16 text-red-500" />
+              </div>
+            </div>
+            <CardTitle className="text-3xl text-red-700 mb-6 font-bold leading-relaxed">
+              لقد استهلكت جميع المحاولات المجانية اليوم 🎯
+            </CardTitle>
+            <CardDescription className="text-xl text-gray-600 mb-8 leading-relaxed">
+              يمكنك العودة غداً للحصول على محاولات جديدة
+              <br />
+              <span className="text-emerald-600 font-semibold mt-4 block">الباقة الاحترافية قريباً 🚀</span>
+            </CardDescription>
+            <Button 
+              onClick={() => setLimitReached(false)} 
+              className="bg-gray-100 text-gray-800 hover:bg-gray-200 text-lg px-8 py-6 rounded-xl"
+            >
+              العودة للوحة التحكم
+            </Button>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -334,7 +402,7 @@ if (error) {
                           اسحب وأفلت المستند هنا أو <span className="text-blue-600">تصفح</span>
                         </p>
                         <p className="text-sm text-gray-500 mt-1">
-                          يدعم: PDF، DOC، DOCX، الصور (PNG، JPG، GIF) • الحد الأقصى للملف: 10 ميجابايت
+                          يدعم: PDF، DOC، DOCX، الصور (PNG، JPG، GIF) • الحد الأقصى للملف: 5 ميجابايت
                         </p>
                       </div>
                     </>

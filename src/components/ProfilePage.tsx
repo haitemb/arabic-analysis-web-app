@@ -9,6 +9,17 @@ import { User, Mail, Phone, MapPin, Building, Calendar, Save, Edit2, Shield } fr
 import { AlgerianPattern } from './AlgerianPattern';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
+import { showError, showSuccess } from '../utils/toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 interface ProfilePageProps {}
 
@@ -33,6 +44,8 @@ export function ProfilePage(_: ProfilePageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Validation helpers
   function validateName(name: string): boolean {
@@ -60,32 +73,32 @@ export function ProfilePage(_: ProfilePageProps) {
 
       // === VALIDATION ===
       if (!validateName(formData.name)) {
-        alert('الاسم غير صالح. يجب أن يحتوي على 3 أحرف على الأقل.');
+        showError('الاسم غير صالح. يجب أن يحتوي على 3 أحرف على الأقل.');
         setLoading(false);
         return;
       }
 
       // optional validations
       if (!validateOptionalPhone(formData.phone)) {
-        alert('رقم الهاتف يجب أن يكون بالشكل: +213XXXXXXXXX');
+        showError('رقم الهاتف يجب أن يكون بالشكل: +213XXXXXXXXX');
         setLoading(false);
         return;
       }
 
       if (!validateOptionalText(formData.city)) {
-        alert('اسم المدينة غير صالح.');
+        showError('اسم المدينة غير صالح.');
         setLoading(false);
         return;
       }
 
       if (!validateOptionalText(organization)) {
-        alert('اسم المؤسسة غير صالح.');
+        showError('اسم المؤسسة غير صالح.');
         setLoading(false);
         return;
       }
 
       if (!validateOptionalText(job_title)) {
-        alert('الوظيفة غير صالحة.');
+        showError('الوظيفة غير صالحة.');
         setLoading(false);
         return;
       }
@@ -108,7 +121,7 @@ export function ProfilePage(_: ProfilePageProps) {
 
       if (profileError) {
         console.error('Error updating profile table:', profileError);
-        alert('حدث خطأ أثناء حفظ المعلومات.');
+        showError('حدث خطأ أثناء حفظ المعلومات.');
         setLoading(false);
         return;
       }
@@ -122,17 +135,17 @@ export function ProfilePage(_: ProfilePageProps) {
 
       if (authError) {
         console.error('Error updating auth user:', authError);
-        alert('لم نتمكن من تحديث بيانات الحساب.');
+        showError('لم نتمكن من تحديث بيانات الحساب.');
         setLoading(false);
         return;
       }
 
       // SUCCESS
       setIsEditing(false);
-      alert('تم حفظ التعديلات بنجاح!');
+      showSuccess('تم حفظ التعديلات بنجاح!');
     } catch (err) {
       console.error('Unexpected error:', err);
-      alert('حدث خطأ غير متوقع.');
+      showError('حدث خطأ غير متوقع.');
     } finally {
       setLoading(false);
     }
@@ -140,12 +153,12 @@ export function ProfilePage(_: ProfilePageProps) {
 
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      alert('كلمة المرور يجب أن تكون أطول من 6 أحرف.');
+      showError('كلمة المرور يجب أن تكون أطول من 6 أحرف.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert('كلمتا المرور غير متطابقتين.');
+      showError('كلمتا المرور غير متطابقتين.');
       return;
     }
 
@@ -155,18 +168,36 @@ export function ProfilePage(_: ProfilePageProps) {
 
       if (error) {
         console.error('Error updating password:', error);
-        alert('تعذر تغيير كلمة المرور.');
+        showError('تعذر تغيير كلمة المرور.');
         return;
       }
 
-      alert('تم تغيير كلمة المرور بنجاح!');
+      showSuccess('تم تغيير كلمة المرور بنجاح!');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
       console.error('Unexpected error:', err);
-      alert('حدث خطأ غير متوقع.');
+      showError('حدث خطأ غير متوقع.');
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setLoading(true);
+      // Attempt to use an RPC if available
+      const { error } = await supabase.rpc('delete_user_account');
+      if (error) {
+         // Fallback to delete profile
+         await supabase.from('profiles').delete().eq('id', formData.id);
+      }
+      await supabase.auth.signOut();
+      showSuccess('تم حذف الحساب نهائياً');
+      window.location.href = '/';
+    } catch (err: any) {
+      showError('فشل حذف الحساب. ' + (err.message || ''));
+      setLoading(false);
     }
   };
 
@@ -475,68 +506,122 @@ export function ProfilePage(_: ProfilePageProps) {
           </CardHeader>
           
           <CardContent>
-            <div className="mt-2 p-4 border rounded-lg">
-              {!showPasswordForm ? (
+            {!showPasswordForm ? (
+              <>
+                <Button 
+                  variant="outline" 
+                  className="border-red-300 text-red-700 hover:bg-red-50 w-full sm:w-auto"
+                  onClick={() => setShowPasswordDialog(true)}
+                >
+                  تغيير كلمة المرور
+                </Button>
+
+                <Separator className="my-6" />
+                
                 <div className="flex flex-col gap-3">
-                  <p className="text-sm text-gray-700">لتغيير كلمة المرور، اضغط الزر أدناه.</p>
+                  <p className="text-sm text-gray-700">يمكنك حذف حسابك نهائياً. لا يمكن التراجع عن هذا الإجراء.</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 w-full sm:w-auto self-start"
+                  >
+                    حذف الحساب نهائياً
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="mt-2 p-0 space-y-3">
+                <h3 className="font-semibold mb-2 text-red-700">تغيير كلمة المرور</h3>
+
+                <Input
+                  type="password"
+                  placeholder="كلمة المرور الجديدة"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={passwordLoading}
+                />
+
+                <Input
+                  type="password"
+                  placeholder="تأكيد كلمة المرور"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={passwordLoading}
+                />
+
+                <div className="flex gap-3 mt-4">
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={passwordLoading}
+                    className="bg-red-600 hover:bg-red-700 text-white flex-1"
+                  >
+                    {passwordLoading ? 'جاري التغيير...' : 'حفظ كلمة المرور'}
+                  </Button>
+
                   <Button
                     variant="outline"
                     onClick={() => {
-                      const ok = window.confirm('تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟');
-                      if (ok) setShowPasswordForm(true);
+                      setShowPasswordForm(false);
+                      setNewPassword('');
+                      setConfirmPassword('');
                     }}
-                    className="border-red-300 text-red-700 hover:bg-red-50 w-full"
+                    disabled={passwordLoading}
+                    className="flex-1"
                   >
-                    تغيير كلمة المرور
+                    إلغاء
                   </Button>
                 </div>
-              ) : (
-                <div className="mt-2 p-0 space-y-3">
-                  <h3 className="font-semibold mb-2">تغيير كلمة المرور</h3>
-
-                  <Input
-                    type="password"
-                    placeholder="كلمة المرور الجديدة"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    disabled={passwordLoading}
-                  />
-
-                  <Input
-                    type="password"
-                    placeholder="تأكيد كلمة المرور"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={passwordLoading}
-                  />
-
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={handleChangePassword}
-                      disabled={passwordLoading}
-                      className="bg-blue-600 text-white flex-1"
-                    >
-                      {passwordLoading ? 'جاري التغيير...' : 'تغيير كلمة المرور'}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowPasswordForm(false);
-                        setNewPassword('');
-                        setConfirmPassword('');
-                      }}
-                      disabled={passwordLoading}
-                      className="flex-1"
-                    >
-                      إلغاء
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        <AlertDialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+          <AlertDialogContent className="rtl:text-right" dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-right">تغيير كلمة المرور</AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex gap-2 sm:justify-start">
+              <AlertDialogCancel onClick={() => setShowPasswordDialog(false)}>إلغاء</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => {
+                  setShowPasswordDialog(false);
+                  setShowPasswordForm(true);
+                }} 
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                متابعة
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent className="rtl:text-right" dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-right">تأكيد حذف الحساب</AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                هل أنت متأكد من أنك تريد حذف حسابك نهائياً؟ سيتم مسح جميع بياناتك وتقاريرك، ولا يمكن التراجع عن هذا الإجراء أبداً.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex gap-2 sm:justify-start">
+              <AlertDialogCancel onClick={() => setShowDeleteDialog(false)}>إلغاء</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  handleDeleteAccount();
+                }} 
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={loading}
+              >
+                {loading ? 'جاري الحذف...' : 'تأكيد الحذف'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

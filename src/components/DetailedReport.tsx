@@ -6,6 +6,7 @@ import { AnalysisData } from '../App';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, CheckCircle2, AlertTriangle, Lightbulb } from 'lucide-react';
 import { Separator } from './ui/separator';
+import { showInfo } from '../utils/toast';
 
 interface DetailedReportProps {
   analysisData: AnalysisData;
@@ -14,7 +15,7 @@ interface DetailedReportProps {
 export function DetailedReport({ analysisData }: DetailedReportProps) {
   const navigate = useNavigate();
   const handleDownloadPDF = () => {
-    alert('سيتم تنزيل ملف PDF هنا');
+    showInfo('سيتم تنزيل ملف PDF هنا');
   };
  
   const strengths = analysisData.strengths;
