@@ -9,16 +9,7 @@ import { AlgerianPattern } from './AlgerianPattern';
 import { supabase } from '../services/supabaseClient';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./ui/alert-dialog";
+import { ConfirmDialog } from './ConfirmDialog';
 import { showError, showSuccess } from '../utils/toast';
 import { toast } from 'sonner';
 
@@ -35,8 +26,6 @@ interface Analysis {
   favorite: boolean;
 }
 
-// analyses will be loaded from Supabase for the logged-in user
-
 export function HistoryPage(_: HistoryPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('الكل');
@@ -45,7 +34,8 @@ export function HistoryPage(_: HistoryPageProps) {
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [targetId, setTargetId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const getScoreColor = (score: number) => {
@@ -129,8 +119,11 @@ export function HistoryPage(_: HistoryPageProps) {
   };
 
   const confirmDelete = async () => {
-    if (!deleteId) return;
-    const id = deleteId;
+    if (!targetId) return;
+
+    setDeleteDialogOpen(false);
+
+    const id = targetId;
 
     try {
       setDeleteLoading(true);
@@ -141,21 +134,19 @@ export function HistoryPage(_: HistoryPageProps) {
         .eq('id', id);
 
       if (error) {
-        console.error('Error deleting analysis:', error);
-        toast.error('تعذر حذف التحليل');
-        return;
+        throw error;
       }
 
-      // Close dialog AFTER success
-      setDeleteId(null);
-      // remove from UI
+      // Remove from UI
       setAnalyses(prev => prev.filter(a => a.id !== id));
       toast.success('تم حذف التحليل نهائياً');
+
     } catch (err) {
       console.error('Error deleting analysis:', err);
       toast.error('حدث خطأ أثناء الحذف');
     } finally {
       setDeleteLoading(false);
+      setTargetId(null);
     }
   };
 
@@ -192,7 +183,7 @@ export function HistoryPage(_: HistoryPageProps) {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 50%, #fef3c7 100%)' }}>
-  <Header />
+      <Header />
       
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* Header with Algerian Pattern */}
@@ -373,7 +364,7 @@ export function HistoryPage(_: HistoryPageProps) {
                       <Button variant="ghost" size="sm" className="hover:bg-emerald-50">
                         <Download className="size-4 text-emerald-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => setDeleteId(analysis.id)}>
+                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => { setTargetId(analysis.id); setDeleteDialogOpen(true); }}>
                         <Trash2 className="size-4 text-red-600" />
                       </Button>
                     </div>
@@ -384,26 +375,15 @@ export function HistoryPage(_: HistoryPageProps) {
           </CardContent>
         </Card>
 
-        <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open && !deleteLoading) setDeleteId(null); }}>
-          <AlertDialogContent className="rtl:text-right" dir="rtl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-right">تأكيد الحذف</AlertDialogTitle>
-              <AlertDialogDescription className="text-right">
-                هل أنت متأكد من أنك تريد حذف هذا التحليل نهائياً؟ لا يمكن التراجع عن هذا الإجراء.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-end">
-              <AlertDialogCancel disabled={deleteLoading} onClick={() => setDeleteId(null)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmDelete}
-                disabled={deleteLoading}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                {deleteLoading ? 'جاري الحذف...' : 'حذف'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onConfirm={confirmDelete}
+          loading={deleteLoading}
+          title="تأكيد الحذف"
+          description="هل أنت متأكد من أنك تريد حذف هذا التحليل نهائياً؟ لا يمكن التراجع عن هذا الإجراء."
+          confirmText="حذف"
+        />
       </main>
     </div>
   );

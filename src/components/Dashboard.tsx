@@ -240,10 +240,25 @@ export function Dashboard(_: DashboardProps) {
     if (isAnalyzing) return;
     if (!selectedLevel || !uploadedFile) return;
 
+    // Block action BEFORE request
+    if (dailyUsage >= DAILY_LIMIT) {
+      setLimitReached(true);
+      return;
+    }
+
     setIsAnalyzing(true);
 
     try {
-      // 1. CHECK USAGE LIMIT via RPC (backend-enforced)
+      // 1. EXTRACT TEXT
+      const { extractTextFromFile } = await import('../services/textExtractor');
+      const { analyzeWithGemini } = await import('../services/geminiApi');
+
+      const extractedText = await extractTextFromFile(uploadedFile);
+
+      // 2. ANALYZE WITH GEMINI
+      const geminiResult = await analyzeWithGemini(extractedText, selectedLevel);
+
+      // 3. INCREMENT USAGE IN DATABASE (Since analysis succeeded)
       if (user?.id) {
         const { data: canUse, error: rpcError } = await supabase.rpc(
           'check_and_increment_usage',
@@ -251,39 +266,15 @@ export function Dashboard(_: DashboardProps) {
         );
 
         if (rpcError) {
-          console.error('RPC error:', rpcError);
-          // Fallback to local count check if RPC fails
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const { count } = await supabase
-            .from('analyses')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-            .gte('created_at', today.toISOString());
-
-          if (count !== null && count >= DAILY_LIMIT) {
-            setLimitReached(true);
-            setDailyUsage(DAILY_LIMIT);
-            setIsAnalyzing(false);
-            return;
-          }
+          console.error('RPC increment error:', rpcError);
         } else if (canUse === false) {
-          // RPC returned false → limit reached
           setLimitReached(true);
           setDailyUsage(DAILY_LIMIT);
           setIsAnalyzing(false);
+          toast.error('لقد استهلكت جميع المحاولات المجانية اليوم');
           return;
         }
       }
-
-      // 2. EXTRACT TEXT
-      const { extractTextFromFile } = await import('../services/textExtractor');
-      const { analyzeWithGemini } = await import('../services/geminiApi');
-
-      const extractedText = await extractTextFromFile(uploadedFile);
-
-      // 3. ANALYZE WITH GEMINI
-      const geminiResult = await analyzeWithGemini(extractedText, selectedLevel);
 
       const analysisData = {
         documentName: uploadedFile.name,
@@ -342,9 +333,9 @@ export function Dashboard(_: DashboardProps) {
       // 6. Navigate to results
       sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisData));
       navigate('/analysis', { state: { analysisData } });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Analysis failed:', error);
-      toast.error('حدث خطأ أثناء التحليل');
+      toast.error(error?.message || 'فشل التحليل، حاول مرة أخرى');
     } finally {
       setIsAnalyzing(false);
     }
@@ -391,7 +382,7 @@ export function Dashboard(_: DashboardProps) {
                       />
                     </div>
                     <span className={`text-sm font-bold whitespace-nowrap ${limitReached ? 'text-red-600' : 'text-gray-700'}`}>
-                      {loadingUsage ? '...' : `${dailyUsage} / ${DAILY_LIMIT}`} تحليلات
+                      {loadingUsage ? '...' : `المستخدم: ${dailyUsage} من ${DAILY_LIMIT} (المتبقي: ${Math.max(0, DAILY_LIMIT - dailyUsage)})`}
                     </span>
                   </div>
                 </div>
@@ -408,20 +399,27 @@ export function Dashboard(_: DashboardProps) {
 
         {/* Limit Reached Full Card */}
         {limitReached && (
-          <Card className="border-2 border-red-200 shadow-2xl p-6 text-center bg-white rounded-2xl">
-            <div className="flex justify-center mb-4">
-              <div className="bg-red-50 p-5 rounded-full border border-red-100">
-                <AlertTriangle className="size-12 text-red-500" />
+          <Card className="border-2 border-red-500 shadow-2xl p-6 text-center bg-white rounded-2xl">
+            <CardHeader className="p-0">
+              <div className="flex justify-center mb-4">
+                <div className="bg-red-50 p-5 rounded-full border border-red-100">
+                  <AlertTriangle className="size-12 text-red-500" />
+                </div>
               </div>
-            </div>
-            <CardTitle className="text-2xl text-red-700 mb-3 font-bold leading-relaxed">
-              لقد استهلكت جميع المحاولات المجانية اليوم 🎯
-            </CardTitle>
-            <CardDescription className="text-lg text-gray-600 mb-6 leading-relaxed">
-              يمكنك العودة غداً للحصول على محاولات جديدة
-              <br />
-              <span className="text-emerald-600 font-semibold mt-3 block">الباقة الاحترافية قريباً 🚀</span>
-            </CardDescription>
+              <CardTitle className="text-2xl text-red-700 mb-3 font-bold leading-relaxed">
+                لقد وصلت إلى الحد المسموح من التحليلات اليوم 🎯
+              </CardTitle>
+              <CardDescription className="text-lg text-gray-600 mb-6 leading-relaxed">
+                لقد استهلكت جميع المحاولات المجانية المتاحة لك اليوم.
+                <br />
+                يمكنك ترقية حسابك للحصول على تحليلات غير محدودة وسرعة أكبر!
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0 flex flex-col items-center gap-3">
+              <Button className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all w-full sm:w-auto">
+                ترقية الخطة (قريباً)
+              </Button>
+            </CardContent>
           </Card>
         )}
 

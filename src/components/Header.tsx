@@ -65,7 +65,7 @@ useEffect(() => {
   };
 
   return (
-    <header className="bg-white border-b-2 shadow-md relative z-50" style={{ pointerEvents: 'auto' }}>
+    <header className="bg-white border-b-2 shadow-md relative z-40" style={{ pointerEvents: 'auto' }}>
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-l from-emerald-600 via-white to-red-600" />
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">

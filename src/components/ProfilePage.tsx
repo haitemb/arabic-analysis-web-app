@@ -11,16 +11,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
 import { showError, showSuccess } from '../utils/toast';
 import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./ui/alert-dialog";
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ProfilePageProps {}
 
@@ -45,9 +36,10 @@ export function ProfilePage(_: ProfilePageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  
   // Validation helpers
   function validateName(name: string): boolean {
     const pattern = /^[\p{L}\s]{3,50}$/u; // required
@@ -165,7 +157,10 @@ export function ProfilePage(_: ProfilePageProps) {
 
     try {
       setPasswordLoading(true);
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
       if (error) {
         console.error('Error updating password:', error);
@@ -174,8 +169,14 @@ export function ProfilePage(_: ProfilePageProps) {
       }
 
       showSuccess('تم تغيير كلمة المرور بنجاح!');
+
+      // ✅ RESET STATE
       setNewPassword('');
       setConfirmPassword('');
+
+      // ✅ CLOSE DIALOG (IMPORTANT)
+      setPasswordDialogOpen(false);
+
     } catch (err) {
       console.error('Unexpected error:', err);
       showError('حدث خطأ غير متوقع.');
@@ -185,20 +186,38 @@ export function ProfilePage(_: ProfilePageProps) {
   };
 
   const handleDeleteAccount = async () => {
+    // ✅ CLOSE DIALOG FIRST (prevents freeze)
+    setDeleteDialogOpen(false);
+
     try {
       setLoading(true);
-      // Attempt to use an RPC if available
+
+      // ✅ Try RPC first
       const { error } = await supabase.rpc('delete_user_account');
+
       if (error) {
-         // Fallback to delete profile
-         await supabase.from('profiles').delete().eq('id', formData.id);
+        console.warn('RPC failed, fallback to profiles delete:', error.message);
+
+        const { error: deleteError } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', formData.id);
+
+        if (deleteError) {
+          throw deleteError;
+        }
       }
+
+      // ✅ SIGN OUT
       await supabase.auth.signOut();
-      // Close dialog AFTER success
-      setShowDeleteDialog(false);
+
       toast.success('تم حذف الحساب نهائياً');
-      window.location.href = '/';
+
+      // ✅ SAFE REDIRECT (no React conflict)
+      window.location.replace('/');
+
     } catch (err: any) {
+      console.error('Delete error:', err);
       toast.error('فشل حذف الحساب. ' + (err.message || ''));
     } finally {
       setLoading(false);
@@ -310,7 +329,7 @@ export function ProfilePage(_: ProfilePageProps) {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 50%, #fef3c7 100%)' }}>
-  <Header />
+      <Header />
       
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         {/* Header with Algerian Pattern */}
@@ -356,10 +375,17 @@ export function ProfilePage(_: ProfilePageProps) {
                   <Edit2 className="size-4 ml-2" />
                   {isEditing ? 'إلغاء' : 'تعديل الملف'}
                 </Button>
+                  <Button 
+                    variant="outline" 
+                    className="border-red-300 text-red-700 hover:bg-red-50 w-full sm:w-auto"
+                    onClick={() => setPasswordDialogOpen(true)}
+                  >
+                    تغيير كلمة المرور
+                  </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
 
         {/* Statistics */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -515,7 +541,7 @@ export function ProfilePage(_: ProfilePageProps) {
                 <Button 
                   variant="outline" 
                   className="border-red-300 text-red-700 hover:bg-red-50 w-full sm:w-auto"
-                  onClick={() => setShowPasswordDialog(true)}
+                  onClick={() => setPasswordDialogOpen(true)}
                 >
                   تغيير كلمة المرور
                 </Button>
@@ -526,7 +552,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   <p className="text-sm text-gray-700">يمكنك حذف حسابك نهائياً. لا يمكن التراجع عن هذا الإجراء.</p>
                   <Button
                     variant="outline"
-                    onClick={() => setShowDeleteDialog(true)}
+                    onClick={() => setDeleteDialogOpen(true)}
                     className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 w-full sm:w-auto self-start"
                   >
                     حذف الحساب نهائياً
@@ -580,49 +606,28 @@ export function ProfilePage(_: ProfilePageProps) {
           </CardContent>
         </Card>
 
-        <AlertDialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-          <AlertDialogContent className="rtl:text-right" dir="rtl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-right">تغيير كلمة المرور</AlertDialogTitle>
-              <AlertDialogDescription className="text-right">
-                تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-end">
-              <AlertDialogCancel onClick={() => setShowPasswordDialog(false)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setShowPasswordDialog(false);
-                  setShowPasswordForm(true);
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                متابعة
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDialog
+          open={passwordDialogOpen}
+          onOpenChange={setPasswordDialogOpen}
+          onConfirm={() => {
+            setPasswordDialogOpen(false);
+            setShowPasswordForm(true);
+          }}
+          loading={false}
+          title="تغيير كلمة المرور"
+          description="تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟"
+          confirmText="متابعة"
+        />
 
-        <AlertDialog open={showDeleteDialog} onOpenChange={(open) => { if (!open && !loading) setShowDeleteDialog(false); }}>
-          <AlertDialogContent className="rtl:text-right" dir="rtl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-right">تأكيد حذف الحساب</AlertDialogTitle>
-              <AlertDialogDescription className="text-right">
-                هل أنت متأكد من أنك تريد حذف حسابك نهائياً؟ سيتم مسح جميع بياناتك وتقاريرك، ولا يمكن التراجع عن هذا الإجراء أبداً.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-end">
-              <AlertDialogCancel disabled={loading} onClick={() => setShowDeleteDialog(false)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteAccount}
-                className="bg-red-600 hover:bg-red-700 text-white"
-                disabled={loading}
-              >
-                {loading ? 'جاري الحذف...' : 'تأكيد الحذف'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onConfirm={handleDeleteAccount}
+          loading={loading}
+          title="تأكيد حذف الحساب"
+          description="هل أنت متأكد من أنك تريد حذف حسابك نهائياً؟ سيتم مسح جميع بياناتك وتقاريرك، ولا يمكن التراجع عن هذا الإجراء أبداً."
+          confirmText="تأكيد الحذف"
+        />
       </main>
     </div>
   );
