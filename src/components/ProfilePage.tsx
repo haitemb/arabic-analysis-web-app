@@ -9,6 +9,7 @@ import { User, Mail, Phone, MapPin, Building, Calendar, Save, Edit2, Shield } fr
 import { AlgerianPattern } from './AlgerianPattern';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ProfilePageProps {}
 
@@ -33,6 +34,7 @@ export function ProfilePage(_: ProfilePageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showPasswordConfirmDialog, setShowPasswordConfirmDialog] = useState(false);
 
   // Validation helpers
   function validateName(name: string): boolean {
@@ -162,6 +164,7 @@ export function ProfilePage(_: ProfilePageProps) {
       alert('تم تغيير كلمة المرور بنجاح!');
       setNewPassword('');
       setConfirmPassword('');
+      setShowPasswordForm(false);
     } catch (err) {
       console.error('Unexpected error:', err);
       alert('حدث خطأ غير متوقع.');
@@ -481,10 +484,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   <p className="text-sm text-gray-700">لتغيير كلمة المرور، اضغط الزر أدناه.</p>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      const ok = window.confirm('تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟');
-                      if (ok) setShowPasswordForm(true);
-                    }}
+                    onClick={() => setShowPasswordConfirmDialog(true)}
                     className="border-red-300 text-red-700 hover:bg-red-50 w-full"
                   >
                     تغيير كلمة المرور
@@ -492,8 +492,6 @@ export function ProfilePage(_: ProfilePageProps) {
                 </div>
               ) : (
                 <div className="mt-2 p-0 space-y-3">
-                  <h3 className="font-semibold mb-2">تغيير كلمة المرور</h3>
-
                   <Input
                     type="password"
                     placeholder="كلمة المرور الجديدة"
@@ -538,6 +536,18 @@ export function ProfilePage(_: ProfilePageProps) {
           </CardContent>
         </Card>
       </main>
+      <ConfirmDialog
+        open={showPasswordConfirmDialog}
+        onOpenChange={setShowPasswordConfirmDialog}
+        title="تأكيد تغيير كلمة المرور"
+        description="سيتم فتح نموذج تغيير كلمة المرور لحسابك. هل تريد المتابعة؟"
+        confirmText="متابعة"
+        onConfirm={() => {
+          setShowPasswordConfirmDialog(false);
+          setShowPasswordForm(true);
+        }}
+        confirmClassName="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 }
