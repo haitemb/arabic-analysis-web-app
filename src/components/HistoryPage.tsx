@@ -9,6 +9,7 @@ import { AlgerianPattern } from './AlgerianPattern';
 import { supabase } from '../services/supabaseClient';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface HistoryPageProps {}
 
@@ -32,6 +33,7 @@ export function HistoryPage(_: HistoryPageProps) {
   const [sortOption, setSortOption] = useState('newest');
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [loading, setLoading] = useState(false);
+  const [analysisPendingDelete, setAnalysisPendingDelete] = useState<Analysis | null>(null);
   const navigate = useNavigate();
 
   const getScoreColor = (score: number) => {
@@ -115,8 +117,6 @@ export function HistoryPage(_: HistoryPageProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('هل تريد حذف هذا التحليل نهائيًا؟')) return;
-
     try {
       const { error } = await supabase
         .from('analyses')
@@ -130,6 +130,7 @@ export function HistoryPage(_: HistoryPageProps) {
 
       // remove from UI
       setAnalyses(prev => prev.filter(a => a.id !== id));
+      setAnalysisPendingDelete(null);
     } catch (err) {
       console.error('Error deleting analysis:', err);
     }
@@ -349,7 +350,12 @@ export function HistoryPage(_: HistoryPageProps) {
                       <Button variant="ghost" size="sm" className="hover:bg-emerald-50">
                         <Download className="size-4 text-emerald-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => handleDelete(analysis.id)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="hover:bg-red-50"
+                        onClick={() => setAnalysisPendingDelete(analysis)}
+                      >
                         <Trash2 className="size-4 text-red-600" />
                       </Button>
                     </div>
@@ -360,6 +366,27 @@ export function HistoryPage(_: HistoryPageProps) {
           </CardContent>
         </Card>
       </main>
+      <ConfirmDialog
+        open={analysisPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAnalysisPendingDelete(null);
+          }
+        }}
+        title="تأكيد حذف التحليل"
+        description={
+          analysisPendingDelete
+            ? `سيتم حذف التحليل "${analysisPendingDelete.documentName}" نهائيًا. هل تريد المتابعة؟`
+            : 'هل تريد حذف هذا التحليل نهائيًا؟'
+        }
+        confirmText="حذف"
+        onConfirm={() => {
+          if (analysisPendingDelete) {
+            void handleDelete(analysisPendingDelete.id);
+          }
+        }}
+        confirmClassName="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 }
