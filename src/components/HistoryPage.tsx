@@ -9,16 +9,8 @@ import { AlgerianPattern } from './AlgerianPattern';
 import { supabase } from '../services/supabaseClient';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./ui/alert-dialog";
+import { AppModal } from './AppModal';
+import { modalDebug } from '../utils/modalDebug';
 import { showError, showSuccess } from '../utils/toast';
 import { toast } from 'sonner';
 
@@ -131,6 +123,7 @@ export function HistoryPage(_: HistoryPageProps) {
   const confirmDelete = async () => {
     if (!deleteId) return;
     const id = deleteId;
+    modalDebug('history-delete', 'confirm-handler-start', { analysisId: id });
 
     try {
       setDeleteLoading(true);
@@ -373,7 +366,15 @@ export function HistoryPage(_: HistoryPageProps) {
                       <Button variant="ghost" size="sm" className="hover:bg-emerald-50">
                         <Download className="size-4 text-emerald-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-red-50" onClick={() => setDeleteId(analysis.id)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="hover:bg-red-50"
+                        onClick={() => {
+                          modalDebug('history-delete', 'trigger-click', { analysisId: analysis.id });
+                          setDeleteId(analysis.id);
+                        }}
+                      >
                         <Trash2 className="size-4 text-red-600" />
                       </Button>
                     </div>
@@ -384,26 +385,19 @@ export function HistoryPage(_: HistoryPageProps) {
           </CardContent>
         </Card>
 
-        <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open && !deleteLoading) setDeleteId(null); }}>
-          <AlertDialogContent className="rtl:text-right" dir="rtl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-right">تأكيد الحذف</AlertDialogTitle>
-              <AlertDialogDescription className="text-right">
-                هل أنت متأكد من أنك تريد حذف هذا التحليل نهائياً؟ لا يمكن التراجع عن هذا الإجراء.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-end">
-              <AlertDialogCancel disabled={deleteLoading} onClick={() => setDeleteId(null)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmDelete}
-                disabled={deleteLoading}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                {deleteLoading ? 'جاري الحذف...' : 'حذف'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <AppModal
+          modalId="history-delete"
+          open={!!deleteId}
+          onClose={() => setDeleteId(null)}
+          title="تأكيد الحذف"
+          description="هل أنت متأكد من أنك تريد حذف هذا التحليل نهائياً؟ لا يمكن التراجع عن هذا الإجراء."
+          confirmText="حذف"
+          cancelText="إلغاء"
+          destructive
+          confirmLoading={deleteLoading}
+          disableDismiss={deleteLoading}
+          onConfirm={confirmDelete}
+        />
       </main>
     </div>
   );
