@@ -113,10 +113,16 @@ export function AppModal({
         <Button
           type="button"
           disabled={confirmLoading}
+          variant={destructive ? 'destructive' : 'default'}
           className={
             destructive
-              ? 'bg-red-600 hover:bg-red-700 text-white'
-              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              ? '!bg-red-600 !text-white hover:!bg-red-700 border-0 shadow-sm'
+              : '!bg-emerald-600 !text-white hover:!bg-emerald-700 border-0 shadow-sm'
+          }
+          style={
+            destructive
+              ? { backgroundColor: '#dc2626', color: '#ffffff' }
+              : { backgroundColor: '#059669', color: '#ffffff' }
           }
           onClick={() => {
             modalDebug(modalId, 'confirm-click');

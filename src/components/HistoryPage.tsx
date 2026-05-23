@@ -11,8 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { AppModal } from './AppModal';
 import { modalDebug } from '../utils/modalDebug';
-import { showError, showSuccess } from '../utils/toast';
+import { showError } from '../utils/toast';
 import { toast } from 'sonner';
+import { mapAnalysisRowToAnalysisData } from '../utils/analysisMapper';
+import { downloadAnalysisReportPdf } from '../utils/reportPdf';
 
 interface HistoryPageProps {}
 
@@ -38,6 +40,7 @@ export function HistoryPage(_: HistoryPageProps) {
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [downloadLoadingId, setDownloadLoadingId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const getScoreColor = (score: number) => {
@@ -117,6 +120,30 @@ export function HistoryPage(_: HistoryPageProps) {
     } catch (err) {
       console.error('Error updating favorite:', err);
       setAnalyses(prev); // revert
+    }
+  };
+
+  const handleDownloadReport = async (analysisId: string) => {
+    try {
+      setDownloadLoadingId(analysisId);
+      const { data, error } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('id', analysisId)
+        .single();
+
+      if (error || !data) {
+        console.error('Error fetching analysis for PDF:', error);
+        showError('تعذر تحميل بيانات التحليل.');
+        return;
+      }
+
+      const analysisData = mapAnalysisRowToAnalysisData(data as Record<string, unknown>);
+      await downloadAnalysisReportPdf(analysisData);
+    } catch {
+      // PDF errors are surfaced via toast inside downloadAnalysisReportPdf
+    } finally {
+      setDownloadLoadingId(null);
     }
   };
 
@@ -363,8 +390,15 @@ export function HistoryPage(_: HistoryPageProps) {
                       <Button variant="ghost" size="sm" className="hover:bg-blue-50" onClick={() => navigate(`/dashboard?analysis=${analysis.id}`)}>
                         <Eye className="size-4 text-blue-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="hover:bg-emerald-50">
-                        <Download className="size-4 text-emerald-600" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="hover:bg-emerald-50"
+                        disabled={downloadLoadingId === analysis.id}
+                        title="تنزيل تقرير التحليل التفصيلي (PDF)"
+                        onClick={() => void handleDownloadReport(analysis.id)}
+                      >
+                        <Download className={`size-4 text-emerald-600 ${downloadLoadingId === analysis.id ? 'opacity-50' : ''}`} />
                       </Button>
                       <Button
                         variant="ghost"

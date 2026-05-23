@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Header } from './Header';
@@ -6,7 +6,7 @@ import { AnalysisData } from '../App';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, CheckCircle2, AlertTriangle, Lightbulb } from 'lucide-react';
 import { Separator } from './ui/separator';
-import { showInfo } from '../utils/toast';
+import { downloadAnalysisReportPdf } from '../utils/reportPdf';
 
 interface DetailedReportProps {
   analysisData: AnalysisData;
@@ -14,8 +14,17 @@ interface DetailedReportProps {
 
 export function DetailedReport({ analysisData }: DetailedReportProps) {
   const navigate = useNavigate();
-  const handleDownloadPDF = () => {
-    showInfo('سيتم تنزيل ملف PDF هنا');
+  const [pdfLoading, setPdfLoading] = React.useState(false);
+
+  const handleDownloadPDF = async () => {
+    try {
+      setPdfLoading(true);
+      await downloadAnalysisReportPdf(analysisData);
+    } catch {
+      // Error toast is shown inside downloadAnalysisReportPdf
+    } finally {
+      setPdfLoading(false);
+    }
   };
  
   const strengths = analysisData.strengths;
@@ -38,11 +47,12 @@ export function DetailedReport({ analysisData }: DetailedReportProps) {
           </Button>
           
           <Button 
-            onClick={handleDownloadPDF}
+            onClick={() => void handleDownloadPDF()}
+            disabled={pdfLoading}
             className="gap-2 bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600"
           >
             <Download className="size-4" />
-            تنزيل التقرير الكامل (PDF)
+            {pdfLoading ? 'جاري التنزيل...' : 'تنزيل التقرير الكامل (PDF)'}
           </Button>
         </div>
 
@@ -278,12 +288,13 @@ export function DetailedReport({ analysisData }: DetailedReportProps) {
 
         <div className="flex justify-center pt-4 pb-8">
           <Button 
-            onClick={handleDownloadPDF}
+            onClick={() => void handleDownloadPDF()}
+            disabled={pdfLoading}
             size="lg"
             className="gap-2 bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600"
           >
             <Download className="size-5" />
-            تنزيل التقرير الكامل (PDF)
+            {pdfLoading ? 'جاري التنزيل...' : 'تنزيل التقرير الكامل (PDF)'}
           </Button>
         </div>
       </main>

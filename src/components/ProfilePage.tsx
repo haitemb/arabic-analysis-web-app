@@ -596,7 +596,9 @@ export function ProfilePage(_: ProfilePageProps) {
               <Button
                 type="button"
                 disabled={passwordLoading}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                variant="destructive"
+                className="!bg-red-600 !text-white hover:!bg-red-700 border-0"
+                style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
                 onClick={() => void handleChangePassword()}
               >
                 {passwordLoading ? 'جاري التغيير...' : 'حفظ'}
