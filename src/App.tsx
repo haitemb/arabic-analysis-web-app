@@ -305,7 +305,7 @@ export default function App() {
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50"  >
           <AppRoutes />
         </div>
-        <Toaster dir="rtl" position="top-center" />
+        <Toaster dir="rtl" position="top-center" visibleToasts={3} closeButton />
       </AuthProvider>
     </BrowserRouter>
   );
