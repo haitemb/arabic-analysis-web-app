@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
@@ -21,6 +21,29 @@ interface RecentAnalysis {
   score: number;
 }
 
+const DEFAULT_ANALYSIS_LIMIT_COUNT = 5;
+const analysisLimitCountFromEnv = Number(import.meta.env.VITE_ANALYSIS_LIMIT_COUNT ?? DEFAULT_ANALYSIS_LIMIT_COUNT);
+const ANALYSIS_LIMIT_COUNT =
+  Number.isFinite(analysisLimitCountFromEnv) && analysisLimitCountFromEnv > 0
+    ? Math.floor(analysisLimitCountFromEnv)
+    : DEFAULT_ANALYSIS_LIMIT_COUNT;
+
+const formatRetryTimeMessage = (remainingSeconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(remainingSeconds));
+  if (safeSeconds === 0) return 'يمكنك المحاولة الآن';
+
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  const parts: string[] = [];
+
+  if (hours > 0) parts.push(`${hours} ساعة`);
+  if (minutes > 0) parts.push(`${minutes} دقيقة`);
+  if (seconds > 0 && parts.length === 0) parts.push(`${seconds} ثانية`);
+
+  return `يمكنك المحاولة بعد ${parts.join(' و ')}`;
+};
+
 export function Dashboard(_: DashboardProps) {
   const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([]);
   const [loadingAnalyses, setLoadingAnalyses] = useState(true);
@@ -28,6 +51,8 @@ export function Dashboard(_: DashboardProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const analyzeLockRef = useRef(false);
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -173,78 +198,96 @@ export function Dashboard(_: DashboardProps) {
   };
 
   const handleAnalyze = async () => {
-    if (selectedLevel && uploadedFile) {
-      setIsAnalyzing(true);
+    if (!selectedLevel || !uploadedFile || isAnalyzing || analyzeLockRef.current) return;
 
-      try {
-        const { extractTextFromFile } = await import('../services/textExtractor');
-        const { analyzeWithGemini } = await import('../services/geminiApi');
+    analyzeLockRef.current = true;
+    setIsAnalyzing(true);
+    setLimitMessage(null);
 
-        const extractedText = await extractTextFromFile(uploadedFile);
-        const geminiResult = await analyzeWithGemini(extractedText, selectedLevel);
+    try {
+      const { data: limitResult, error: limitError } = await supabase.rpc('check_and_log_usage', {
+        limit_count: ANALYSIS_LIMIT_COUNT,
+      });
 
-        const analysisData = {
-          documentName: uploadedFile.name,
-          executiveSummary: geminiResult.executiveSummary,
-          educationLevel: selectedLevel,
-          overallScore: geminiResult.overallScore,
-          uploadDate: new Date().toISOString(),
-          linguisticAnalysis: geminiResult.linguisticAnalysis,
-          semanticAnalysis: geminiResult.semanticAnalysis,
-          bloomsTaxonomy: geminiResult.bloomsTaxonomy,
-          contentOrganization: geminiResult.contentOrganization,
-          strengths: geminiResult.strengths,
-          weaknesses: geminiResult.weaknesses,
-          recommendations: geminiResult.recommendations,
-          keyFindings: geminiResult.keyFindings,
-        };
-
-        // === SAVE TO SUPABASE ===
-const { data: inserted, error } = await supabase
-  .from('analyses')
-  .insert({
-    user_id: user?.id,
-    filename: uploadedFile.name,
-    education_level: selectedLevel,
-    overall_score: geminiResult.overallScore,
-    executive_summary: analysisData.executiveSummary,
-    linguistic_analysis: analysisData.linguisticAnalysis,
-    semantic_analysis: analysisData.semanticAnalysis,
-    blooms_taxonomy: analysisData.bloomsTaxonomy,
-    content_organization: analysisData.contentOrganization,
-    strengths: analysisData.strengths,
-    weaknesses: analysisData.weaknesses,
-    recommendations: analysisData.recommendations,
-    key_findings: analysisData.keyFindings,
-  })
-  .select()
-  .single();
-
-if (error) {
-  console.error('Error saving analysis:', error);
-} else if (inserted) {
-  // prepend to recent analyses
-  const mapped: RecentAnalysis = {
-    id: inserted.id,
-    documentName: inserted.filename ?? analysisData.documentName,
-    date: new Date(inserted.created_at ?? analysisData.uploadDate).toLocaleDateString('ar-DZ'),
-    educationLevel: inserted.education_level ?? analysisData.educationLevel,
-    score: inserted.overall_score ?? analysisData.overallScore,
-  };
-
-  setRecentAnalyses((prev) => [mapped, ...prev].slice(0, 10));
-}
-
-
-        // Save to session + navigate
-        sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisData));
-        navigate('/analysis', { state: { analysisData } });
-      } catch (error) {
-        console.error('Analysis failed:', error);
-        alert('حدث خطأ أثناء التحليل');
+      if (limitError) {
+        console.error('Rate limit RPC failed:', limitError);
+        alert('تعذر التحقق من الحد الحالي. يرجى المحاولة لاحقاً.');
+        return;
       }
 
+      const usage = Array.isArray(limitResult) ? limitResult[0] : limitResult;
+      if (!usage?.allowed) {
+        setLimitMessage(formatRetryTimeMessage(Number(usage?.remaining_seconds ?? 0)));
+        return;
+      }
+
+      const { extractTextFromFile } = await import('../services/textExtractor');
+      const { analyzeWithGemini } = await import('../services/geminiApi');
+
+      const extractedText = await extractTextFromFile(uploadedFile);
+      const geminiResult = await analyzeWithGemini(extractedText, selectedLevel);
+
+      const analysisData = {
+        documentName: uploadedFile.name,
+        executiveSummary: geminiResult.executiveSummary,
+        educationLevel: selectedLevel,
+        overallScore: geminiResult.overallScore,
+        uploadDate: new Date().toISOString(),
+        linguisticAnalysis: geminiResult.linguisticAnalysis,
+        semanticAnalysis: geminiResult.semanticAnalysis,
+        bloomsTaxonomy: geminiResult.bloomsTaxonomy,
+        contentOrganization: geminiResult.contentOrganization,
+        strengths: geminiResult.strengths,
+        weaknesses: geminiResult.weaknesses,
+        recommendations: geminiResult.recommendations,
+        keyFindings: geminiResult.keyFindings,
+      };
+
+      // === SAVE TO SUPABASE ===
+      const { data: inserted, error } = await supabase
+        .from('analyses')
+        .insert({
+          user_id: user?.id,
+          filename: uploadedFile.name,
+          education_level: selectedLevel,
+          overall_score: geminiResult.overallScore,
+          executive_summary: analysisData.executiveSummary,
+          linguistic_analysis: analysisData.linguisticAnalysis,
+          semantic_analysis: analysisData.semanticAnalysis,
+          blooms_taxonomy: analysisData.bloomsTaxonomy,
+          content_organization: analysisData.contentOrganization,
+          strengths: analysisData.strengths,
+          weaknesses: analysisData.weaknesses,
+          recommendations: analysisData.recommendations,
+          key_findings: analysisData.keyFindings,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving analysis:', error);
+      } else if (inserted) {
+        // prepend to recent analyses
+        const mapped: RecentAnalysis = {
+          id: inserted.id,
+          documentName: inserted.filename ?? analysisData.documentName,
+          date: new Date(inserted.created_at ?? analysisData.uploadDate).toLocaleDateString('ar-DZ'),
+          educationLevel: inserted.education_level ?? analysisData.educationLevel,
+          score: inserted.overall_score ?? analysisData.overallScore,
+        };
+
+        setRecentAnalyses((prev) => [mapped, ...prev].slice(0, 10));
+      }
+
+      // Save to session + navigate
+      sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisData));
+      navigate('/analysis', { state: { analysisData } });
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      alert('حدث خطأ أثناء التحليل');
+    } finally {
       setIsAnalyzing(false);
+      analyzeLockRef.current = false;
     }
   };
 
@@ -364,6 +407,14 @@ if (error) {
                 type="info"
                 message={"جاري معالجة المستند بواسطة الذكاء الاصطناعي. قد يستغرق هذا بضع لحظات..."}
                 onClose={() => {}}
+              />
+            )}
+            {limitMessage && !isAnalyzing && (
+              <Alert
+                type="warning"
+                message={limitMessage}
+                onClose={() => setLimitMessage(null)}
+                autoClose={8000}
               />
             )}
           </CardContent>
