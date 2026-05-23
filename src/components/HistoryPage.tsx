@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { showError, showSuccess } from '../utils/toast';
+import { toast } from 'sonner';
 
 interface HistoryPageProps {}
 
@@ -43,6 +44,7 @@ export function HistoryPage(_: HistoryPageProps) {
   const [sortOption, setSortOption] = useState('newest');
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -129,9 +131,10 @@ export function HistoryPage(_: HistoryPageProps) {
   const confirmDelete = async () => {
     if (!deleteId) return;
     const id = deleteId;
-    setDeleteId(null);
 
     try {
+      setDeleteLoading(true);
+
       const { error } = await supabase
         .from('analyses')
         .delete()
@@ -139,16 +142,20 @@ export function HistoryPage(_: HistoryPageProps) {
 
       if (error) {
         console.error('Error deleting analysis:', error);
-        showError('تعذر حذف التحليل');
+        toast.error('تعذر حذف التحليل');
         return;
       }
 
+      // Close dialog AFTER success
+      setDeleteId(null);
       // remove from UI
       setAnalyses(prev => prev.filter(a => a.id !== id));
-      showSuccess('تم حذف التحليل نهائياً');
+      toast.success('تم حذف التحليل نهائياً');
     } catch (err) {
       console.error('Error deleting analysis:', err);
-      showError('حدث خطأ أثناء الحذف');
+      toast.error('حدث خطأ أثناء الحذف');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -377,7 +384,7 @@ export function HistoryPage(_: HistoryPageProps) {
           </CardContent>
         </Card>
 
-        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open && !deleteLoading) setDeleteId(null); }}>
           <AlertDialogContent className="rtl:text-right" dir="rtl">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-right">تأكيد الحذف</AlertDialogTitle>
@@ -385,10 +392,14 @@ export function HistoryPage(_: HistoryPageProps) {
                 هل أنت متأكد من أنك تريد حذف هذا التحليل نهائياً؟ لا يمكن التراجع عن هذا الإجراء.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-start">
-              <AlertDialogCancel onClick={() => setDeleteId(null)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-white">
-                حذف
+            <AlertDialogFooter className="flex gap-2 sm:justify-end">
+              <AlertDialogCancel disabled={deleteLoading} onClick={() => setDeleteId(null)}>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                disabled={deleteLoading}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleteLoading ? 'جاري الحذف...' : 'حذف'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

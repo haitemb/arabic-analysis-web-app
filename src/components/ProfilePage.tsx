@@ -10,6 +10,7 @@ import { AlgerianPattern } from './AlgerianPattern';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
 import { showError, showSuccess } from '../utils/toast';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -193,10 +194,13 @@ export function ProfilePage(_: ProfilePageProps) {
          await supabase.from('profiles').delete().eq('id', formData.id);
       }
       await supabase.auth.signOut();
-      showSuccess('تم حذف الحساب نهائياً');
+      // Close dialog AFTER success
+      setShowDeleteDialog(false);
+      toast.success('تم حذف الحساب نهائياً');
       window.location.href = '/';
     } catch (err: any) {
-      showError('فشل حذف الحساب. ' + (err.message || ''));
+      toast.error('فشل حذف الحساب. ' + (err.message || ''));
+    } finally {
       setLoading(false);
     }
   };
@@ -584,13 +588,13 @@ export function ProfilePage(_: ProfilePageProps) {
                 تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-start">
+            <AlertDialogFooter className="flex gap-2 sm:justify-end">
               <AlertDialogCancel onClick={() => setShowPasswordDialog(false)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction 
+              <AlertDialogAction
                 onClick={() => {
                   setShowPasswordDialog(false);
                   setShowPasswordForm(true);
-                }} 
+                }}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
                 متابعة
@@ -599,7 +603,7 @@ export function ProfilePage(_: ProfilePageProps) {
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialog open={showDeleteDialog} onOpenChange={(open) => { if (!open && !loading) setShowDeleteDialog(false); }}>
           <AlertDialogContent className="rtl:text-right" dir="rtl">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-right">تأكيد حذف الحساب</AlertDialogTitle>
@@ -607,13 +611,10 @@ export function ProfilePage(_: ProfilePageProps) {
                 هل أنت متأكد من أنك تريد حذف حسابك نهائياً؟ سيتم مسح جميع بياناتك وتقاريرك، ولا يمكن التراجع عن هذا الإجراء أبداً.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="flex gap-2 sm:justify-start">
-              <AlertDialogCancel onClick={() => setShowDeleteDialog(false)}>إلغاء</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={() => {
-                  setShowDeleteDialog(false);
-                  handleDeleteAccount();
-                }} 
+            <AlertDialogFooter className="flex gap-2 sm:justify-end">
+              <AlertDialogCancel disabled={loading} onClick={() => setShowDeleteDialog(false)}>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAccount}
                 className="bg-red-600 hover:bg-red-700 text-white"
                 disabled={loading}
               >
