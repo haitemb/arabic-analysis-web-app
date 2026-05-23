@@ -9,6 +9,16 @@ import { User, Mail, Phone, MapPin, Building, Calendar, Save, Edit2, Shield } fr
 import { AlgerianPattern } from './AlgerianPattern';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Separator } from './ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 interface ProfilePageProps {}
 
@@ -33,6 +43,8 @@ export function ProfilePage(_: ProfilePageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showPasswordConfirmDialog, setShowPasswordConfirmDialog] = useState(false);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
 
   // Validation helpers
   function validateName(name: string): boolean {
@@ -470,7 +482,7 @@ export function ProfilePage(_: ProfilePageProps) {
               الأمان وكلمة المرور
             </CardTitle>
             <CardDescription>
-              إدارة إعدادات الأمان وتغيير كلمة المرور
+              إدارة إعدادات الأمان للحساب
             </CardDescription>
           </CardHeader>
           
@@ -478,22 +490,23 @@ export function ProfilePage(_: ProfilePageProps) {
             <div className="mt-2 p-4 border rounded-lg">
               {!showPasswordForm ? (
                 <div className="flex flex-col gap-3">
-                  <p className="text-sm text-gray-700">لتغيير كلمة المرور، اضغط الزر أدناه.</p>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      const ok = window.confirm('تحذير: سيتم تغيير كلمة المرور لحسابك. هل تريد المتابعة؟');
-                      if (ok) setShowPasswordForm(true);
-                    }}
+                    onClick={() => setShowPasswordConfirmDialog(true)}
                     className="border-red-300 text-red-700 hover:bg-red-50 w-full"
                   >
                     تغيير كلمة المرور
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirmDialog(true)}
+                    className="border-red-300 text-red-700 hover:bg-red-50 w-full"
+                  >
+                    حذف الحساب نهائياً
+                  </Button>
                 </div>
               ) : (
                 <div className="mt-2 p-0 space-y-3">
-                  <h3 className="font-semibold mb-2">تغيير كلمة المرور</h3>
-
                   <Input
                     type="password"
                     placeholder="كلمة المرور الجديدة"
@@ -537,6 +550,46 @@ export function ProfilePage(_: ProfilePageProps) {
             </div>
           </CardContent>
         </Card>
+
+        <AlertDialog open={showPasswordConfirmDialog} onOpenChange={setShowPasswordConfirmDialog}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-right">تأكيد تغيير كلمة المرور</AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                هل تريد متابعة تغيير كلمة المرور لحسابك؟
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => setShowPasswordForm(true)}
+              >
+                متابعة
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-right">تأكيد حذف الحساب</AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                هل أنت متأكد من المتابعة؟ حذف الحساب نهائياً إجراء غير قابل للتراجع.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => setShowDeleteConfirmDialog(false)}
+              >
+                حذف الحساب نهائياً
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );
