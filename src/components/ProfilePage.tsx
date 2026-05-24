@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { Button } from './ui/button';
@@ -7,9 +7,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Header } from './Header';
 import { supabase } from '../services/supabaseClient';
-import { User, Mail, Phone, MapPin, Building, Calendar, Save, Edit2, Shield } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Building, Calendar, Save, Edit2, Shield, Camera, Loader2 } from 'lucide-react';
 import { AlgerianPattern } from './AlgerianPattern';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Separator } from './ui/separator';
 import { showError, showSuccess } from '../utils/toast';
 import { toast } from 'sonner';
@@ -32,6 +32,11 @@ export function ProfilePage(_: ProfilePageProps) {
     role: '',
   });
 
+  // ── Avatar state ──────────────────────────────────────────────────────────
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const handleSave = () => {
     // legacy - replaced by handleSaveProfile
   };
@@ -44,9 +49,10 @@ export function ProfilePage(_: ProfilePageProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Validation helpers
+  // ── Validation helpers ────────────────────────────────────────────────────
+
   function validateName(name: string): boolean {
-    const pattern = /^[\p{L}\s]{3,50}$/u; // required
+    const pattern = /^[\p{L}\s]{3,50}$/u;
     return pattern.test(name);
   }
 
@@ -60,22 +66,95 @@ export function ProfilePage(_: ProfilePageProps) {
     return !text || (typeof text === 'string' && text.trim().length <= 100);
   }
 
+  // ── Avatar upload ─────────────────────────────────────────────────────────
+
+  /**
+   * Uploads the selected image to the `avatars` Supabase Storage bucket.
+   * Uses `${user.id}.png` as the filename with `upsert: true` so there is
+   * always exactly one file per user (old image is replaced automatically).
+   * After upload, writes the public URL into profiles.avatar_url.
+   */
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !formData.id) return;
+
+    // Accept only image files
+    if (!file.type.startsWith('image/')) {
+      showError('يُسمح فقط برفع ملفات الصور.');
+      return;
+    }
+
+    // Guard against huge files (max 5 MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showError('حجم الصورة يجب أن يكون أقل من 5 ميجابايت.');
+      return;
+    }
+
+    try {
+      setAvatarUploading(true);
+
+      // 1️⃣  Upload (upsert) — one file per user, auto-replaces old one
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(`${formData.id}.png`, file, {
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        console.error('Avatar upload error:', uploadError);
+        showError('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
+        return;
+      }
+
+      // 2️⃣  Get public URL
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(`${formData.id}.png`);
+
+      // Add cache-busting query param so the browser re-fetches the new image
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // 3️⃣  Persist URL to profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', formData.id);
+
+      if (profileError) {
+        console.error('Profile avatar_url update error:', profileError);
+        showError('تم رفع الصورة لكن فشل حفظها في الملف الشخصي.');
+        return;
+      }
+
+      // 4️⃣  Update local UI immediately
+      setAvatarUrl(publicUrl);
+      showSuccess('تم تحديث الصورة الشخصية بنجاح!');
+    } catch (err) {
+      console.error('Unexpected avatar upload error:', err);
+      showError('حدث خطأ غير متوقع أثناء رفع الصورة.');
+    } finally {
+      setAvatarUploading(false);
+      // Reset input so the same file can be re-selected if needed
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  // ── Save profile ──────────────────────────────────────────────────────────
+
   const handleSaveProfile = async () => {
     try {
       setLoading(true);
 
-      // derive organization/job_title from current form shape
       const organization = formData.institution;
       const job_title = formData.role;
 
-      // === VALIDATION ===
       if (!validateName(formData.name)) {
         showError('الاسم غير صالح. يجب أن يحتوي على 3 أحرف على الأقل.');
         setLoading(false);
         return;
       }
 
-      // optional validations
       if (!validateOptionalPhone(formData.phone)) {
         showError('رقم الهاتف يجب أن يكون بالشكل: +213XXXXXXXXX');
         setLoading(false);
@@ -100,11 +179,10 @@ export function ProfilePage(_: ProfilePageProps) {
         return;
       }
 
-      // === UPDATE PROFILE TABLE (safe) ===
       const profileUpdate: any = {
         id: formData.id,
         full_name: formData.name,
-        email: formData.email, // read-only, keep existing
+        email: formData.email,
         phone: formData.phone || null,
         city: formData.city || null,
         organization: organization || null,
@@ -123,11 +201,8 @@ export function ProfilePage(_: ProfilePageProps) {
         return;
       }
 
-      // === UPDATE AUTH.USERS (only full_name) ===
       const { error: authError } = await supabase.auth.updateUser({
-        data: {
-          full_name: formData.name,
-        },
+        data: { full_name: formData.name },
       });
 
       if (authError) {
@@ -137,7 +212,6 @@ export function ProfilePage(_: ProfilePageProps) {
         return;
       }
 
-      // SUCCESS
       setIsEditing(false);
       showSuccess('تم حفظ التعديلات بنجاح!');
     } catch (err) {
@@ -147,6 +221,8 @@ export function ProfilePage(_: ProfilePageProps) {
       setLoading(false);
     }
   };
+
+  // ── Change password ───────────────────────────────────────────────────────
 
   const handleChangePassword = async (): Promise<boolean> => {
     modalDebug('profile-password', 'confirm-handler-start');
@@ -184,6 +260,8 @@ export function ProfilePage(_: ProfilePageProps) {
     }
   };
 
+  // ── Delete account ────────────────────────────────────────────────────────
+
   const handleDeleteAccount = async () => {
     modalDebug('profile-delete', 'confirm-handler-start', { userId: formData.id });
     if (!formData.id) {
@@ -197,7 +275,6 @@ export function ProfilePage(_: ProfilePageProps) {
       const { error: rpcError } = await supabase.rpc('delete_user_account');
 
       if (rpcError) {
-        // RPC missing or failed — delete app data only (auth user may remain; see scratch/delete_user_account.sql)
         const { error: analysesError } = await supabase
           .from('analyses')
           .delete()
@@ -233,6 +310,8 @@ export function ProfilePage(_: ProfilePageProps) {
     }
   };
 
+  // ── Fetch user data ───────────────────────────────────────────────────────
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -256,7 +335,6 @@ export function ProfilePage(_: ProfilePageProps) {
           .single();
 
         if (profileError && profileError.code !== 'PGRST116') {
-          // PGRST116 = No rows found (supabase might use different codes depending on adapter)
           console.error('Error fetching profile:', profileError);
         }
 
@@ -269,6 +347,11 @@ export function ProfilePage(_: ProfilePageProps) {
           institution: profile?.organization || '',
           role: profile?.job_title || '',
         });
+
+        // ── Load saved avatar URL ─────────────────────────────────────────
+        if (profile?.avatar_url) {
+          setAvatarUrl(profile.avatar_url);
+        }
       } catch (err) {
         console.error('Unexpected error fetching user data:', err);
       }
@@ -276,6 +359,8 @@ export function ProfilePage(_: ProfilePageProps) {
 
     fetchUserData();
   }, []);
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
 
   const [stats, setStats] = useState([
     { label: 'إجمالي التحليلات', value: '0', color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -299,12 +384,9 @@ export function ProfilePage(_: ProfilePageProps) {
           return;
         }
 
-        if (!analyses || analyses.length === 0) {
-          return;
-        }
+        if (!analyses || analyses.length === 0) return;
 
         const totalAnalyses = analyses.length;
-
         const now = new Date();
         const analysesThisMonth = analyses.filter((a: any) => {
           const created = new Date(a.created_at);
@@ -336,33 +418,84 @@ export function ProfilePage(_: ProfilePageProps) {
     fetchStats();
   }, [formData.id]);
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 50%, #fef3c7 100%)' }}>
-  <Header />
-      
+      <Header />
+
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {/* Header with Algerian Pattern */}
+
+        {/* ── Header card with avatar ───────────────────────────────────── */}
         <div className="relative">
           <Card className="border-2 border-emerald-600/20 shadow-xl overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-l from-emerald-600 via-white to-red-600 opacity-10" />
             <AlgerianPattern className="absolute top-0 right-0 w-64 h-64 text-emerald-600" />
-            
+
             <CardContent className="pt-8 pb-6 relative z-10">
               <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className="relative">
+
+                {/* ── Avatar with upload overlay ────────────────────────── */}
+                <div className="relative group">
+                  {/* Hidden file input */}
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                    disabled={avatarUploading}
+                  />
+
                   <Avatar className="size-24 border-4 border-white shadow-lg">
+                    {avatarUrl && (
+                      <AvatarImage
+                        src={avatarUrl}
+                        alt="صورة الملف الشخصي"
+                        className="object-cover"
+                      />
+                    )}
                     <AvatarFallback className="text-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white">
-                      أم
+                      {formData.name ? formData.name.charAt(0) : 'أم'}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-1 -left-1 bg-emerald-600 text-white rounded-full p-1.5">
+
+                  {/* Upload overlay — shown on hover or while uploading */}
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarUploading}
+                    aria-label="تغيير الصورة الشخصية"
+                    className={`
+                      absolute inset-0 rounded-full flex flex-col items-center justify-center gap-1
+                      bg-black/50 text-white
+                      transition-opacity duration-200
+                      ${avatarUploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+                      cursor-pointer disabled:cursor-not-allowed
+                    `}
+                  >
+                    {avatarUploading ? (
+                      <Loader2 className="size-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Camera className="size-5" />
+                        <span className="text-[10px] font-medium leading-none">تغيير</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Verified badge */}
+                  <div className="absolute -bottom-1 -left-1 bg-emerald-600 text-white rounded-full p-1.5 pointer-events-none">
                     <Shield className="size-4" />
                   </div>
                 </div>
-                
+
+                {/* Name / role / email */}
                 <div className="flex-1 text-center md:text-right">
                   <h2 className="text-blue-900 mb-1">{formData.name || 'الاسم'}</h2>
-                  <p className="text-gray-600 mb-3">{(formData.role || 'العمل')} - {(formData.institution || 'المؤسسة')}</p>
+                  <p className="text-gray-600 mb-3">
+                    {formData.role || 'العمل'} - {formData.institution || 'المؤسسة'}
+                  </p>
                   <div className="flex flex-wrap gap-3 justify-center md:justify-start text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <MapPin className="size-4 text-red-600" />
@@ -375,11 +508,15 @@ export function ProfilePage(_: ProfilePageProps) {
                     </span>
                   </div>
                 </div>
-                
+
                 <Button
                   onClick={() => setIsEditing(!isEditing)}
-                  variant={isEditing ? "outline" : "default"}
-                  className={isEditing ? "" : "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800"}
+                  variant={isEditing ? 'outline' : 'default'}
+                  className={
+                    isEditing
+                      ? ''
+                      : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800'
+                  }
                 >
                   <Edit2 className="size-4 ml-2" />
                   {isEditing ? 'إلغاء' : 'تعديل الملف'}
@@ -389,7 +526,7 @@ export function ProfilePage(_: ProfilePageProps) {
           </Card>
         </div>
 
-        {/* Statistics */}
+        {/* ── Statistics ────────────────────────────────────────────────── */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat, index) => (
             <Card key={index} className={`${stat.bg} border-2 border-emerald-600/10 shadow-md`}>
@@ -401,7 +538,7 @@ export function ProfilePage(_: ProfilePageProps) {
           ))}
         </div>
 
-        {/* Profile Information */}
+        {/* ── Profile Information ───────────────────────────────────────── */}
         <Card className="border-2 border-emerald-600/20 shadow-xl">
           <CardHeader className="relative">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-l from-emerald-600 via-white to-red-600" />
@@ -410,9 +547,10 @@ export function ProfilePage(_: ProfilePageProps) {
               {isEditing ? 'قم بتحديث معلوماتك الشخصية' : 'عرض وإدارة معلومات حسابك'}
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
+
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-2">
                   <User className="size-4 text-emerald-600" />
@@ -427,7 +565,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   className={isEditing ? 'border-emerald-300' : 'bg-gray-50'}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-2">
                   <Mail className="size-4 text-emerald-600" />
@@ -441,7 +579,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   className="w-full px-3 py-2 rounded border border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="phone" className="flex items-center gap-2">
                   <Phone className="size-4 text-emerald-600" />
@@ -456,7 +594,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   className={isEditing ? 'border-emerald-300' : 'bg-gray-50'}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="city" className="flex items-center gap-2">
                   <MapPin className="size-4 text-emerald-600" />
@@ -471,7 +609,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   className={isEditing ? 'border-emerald-300' : 'bg-gray-50'}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="institution" className="flex items-center gap-2">
                   <Building className="size-4 text-emerald-600" />
@@ -486,7 +624,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   className={isEditing ? 'border-emerald-300' : 'bg-gray-50'}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="role" className="flex items-center gap-2">
                   <Calendar className="size-4 text-emerald-600" />
@@ -501,8 +639,9 @@ export function ProfilePage(_: ProfilePageProps) {
                   className={isEditing ? 'border-emerald-300' : 'bg-gray-50'}
                 />
               </div>
+
             </div>
-            
+
             {isEditing && (
               <>
                 <Separator />
@@ -510,7 +649,7 @@ export function ProfilePage(_: ProfilePageProps) {
                   <Button variant="outline" onClick={() => setIsEditing(false)}>
                     إلغاء
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSaveProfile}
                     disabled={loading}
                     className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800"
@@ -524,7 +663,7 @@ export function ProfilePage(_: ProfilePageProps) {
           </CardContent>
         </Card>
 
-        {/* Security Section */}
+        {/* ── Security Section ──────────────────────────────────────────── */}
         <Card className="border-2 border-red-600/20 shadow-xl">
           <CardHeader className="relative">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-l from-red-600 via-white to-emerald-600" />
@@ -536,7 +675,7 @@ export function ProfilePage(_: ProfilePageProps) {
               إدارة إعدادات الأمان وتغيير كلمة المرور
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             <Button
               variant="outline"
@@ -567,6 +706,7 @@ export function ProfilePage(_: ProfilePageProps) {
           </CardContent>
         </Card>
 
+        {/* ── Password Dialog ───────────────────────────────────────────── */}
         <AppModal
           modalId="profile-password"
           open={showPasswordDialog}
@@ -632,6 +772,7 @@ export function ProfilePage(_: ProfilePageProps) {
           </div>
         </AppModal>
 
+        {/* ── Delete Account Dialog ─────────────────────────────────────── */}
         <AppModal
           modalId="profile-delete"
           open={showDeleteDialog}
@@ -645,6 +786,7 @@ export function ProfilePage(_: ProfilePageProps) {
           disableDismiss={deleteLoading}
           onConfirm={handleDeleteAccount}
         />
+
       </main>
     </div>
   );

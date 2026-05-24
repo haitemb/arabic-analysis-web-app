@@ -372,56 +372,58 @@ export function Dashboard(_: DashboardProps) {
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         {/* Usage Card */}
-        <Card className={`border-2 shadow-lg ${limitReached ? 'border-red-300 bg-red-50' : 'border-emerald-200'}`}>
+        <Card className={`border-2 shadow-lg ${limitReached ? 'border-red-300 bg-red-50' : 'border-emerald-200 bg-white'}`}>
           <CardContent className="pt-5 pb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex items-center gap-3 flex-1">
-                <div className={`p-2.5 rounded-full ${limitReached ? 'bg-red-100' : 'bg-emerald-100'}`}>
-                  <BarChart2 className={`size-5 ${limitReached ? 'text-red-600' : 'text-emerald-600'}`} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-700 mb-1">
-                    استخدام اليوم
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2.5 rounded-full bg-gray-200 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${usageColor}`}
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm font-bold whitespace-nowrap ${limitReached ? 'text-red-600' : 'text-gray-700'}`}>
-                      {loadingUsage ? '...' : `${dailyUsage} / ${DAILY_LIMIT}`} تحليلات
-                    </span>
-                  </div>
-                </div>
+            {/* Row 1: icon + title + count badge */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`p-2.5 rounded-full shrink-0 ${limitReached ? 'bg-red-100' : 'bg-emerald-100'}`}>
+                <BarChart2 className={`size-5 ${limitReached ? 'text-red-600' : 'text-emerald-600'}`} />
               </div>
-              {limitReached && (
-                <div className="flex items-center gap-2 text-red-700 bg-red-100 px-3 py-1.5 rounded-lg text-sm">
-                  <AlertTriangle className="size-4 shrink-0" />
-                  <span>استُنفد الحد اليومي — عُد غداً</span>
-                </div>
-              )}
+              <span className="text-sm font-semibold text-gray-700 leading-none">
+                استخدام اليوم
+              </span>
+              <span className={`mr-auto text-sm font-bold whitespace-nowrap leading-none ${limitReached ? 'text-red-600' : 'text-gray-700'}`}>
+                {loadingUsage ? '...' : `${dailyUsage} / ${DAILY_LIMIT}`} تحليلات
+              </span>
             </div>
+
+            {/* Row 2: progress bar */}
+            <div className="h-2.5 rounded-full bg-gray-200 overflow-hidden mb-3">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${usageColor}`}
+                style={{ width: `${usagePercent}%` }}
+              />
+            </div>
+
+            {/* Row 3: warning (only when limit reached) */}
+            {limitReached && (
+              <div className="flex items-center gap-2 text-red-700 bg-red-100 border border-red-200 px-3 py-2 rounded-lg text-sm">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span className="leading-none">استُنفد الحد اليومي — عُد غداً</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Limit Reached Full Card */}
         {limitReached && (
-          <Card className="border-2 border-red-200 shadow-2xl p-6 text-center bg-white rounded-2xl">
-            <div className="flex justify-center mb-4">
-              <div className="bg-red-50 p-5 rounded-full border border-red-100">
-                <AlertTriangle className="size-12 text-red-500" />
+          <Card className="border-2 border-red-200 shadow-xl bg-white rounded-2xl overflow-hidden">
+            <CardContent className="pt-8 pb-8 px-6 flex flex-col items-center text-center gap-4">
+              <div className="bg-red-50 p-4 rounded-full border border-red-100">
+                <AlertTriangle className="size-10 text-red-500" />
               </div>
-            </div>
-            <CardTitle className="text-2xl text-red-700 mb-3 font-bold leading-relaxed">
-              لقد استهلكت جميع المحاولات المجانية اليوم 🎯
-            </CardTitle>
-            <CardDescription className="text-lg text-gray-600 mb-6 leading-relaxed">
-              يمكنك العودة غداً للحصول على محاولات جديدة
-              <br />
-              <span className="text-emerald-600 font-semibold mt-3 block">الباقة الاحترافية قريباً 🚀</span>
-            </CardDescription>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-red-700 leading-snug">
+                  لقد استهلكت جميع المحاولات المجانية اليوم 🎯
+                </h3>
+                <p className="text-base text-gray-500 leading-relaxed">
+                  يمكنك العودة غداً للحصول على محاولات جديدة
+                </p>
+              </div>
+              <span className="inline-block text-emerald-600 font-semibold text-sm bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-full">
+                الباقة الاحترافية قريباً 🚀
+              </span>
+            </CardContent>
           </Card>
         )}
 
